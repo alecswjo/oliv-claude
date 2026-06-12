@@ -97,12 +97,8 @@ export default function SignInScreen() {
         </View>
 
         <Card style={{ gap: spacing(3) }}>
-          <Button
-            title="Continue with Apple"
-            variant="secondary"
-            loading={busy === 'apple'}
-            onPress={() => submitOAuth('apple')}
-          />
+          {/* Apple is hidden until the provider is configured (signInWithProvider
+              already supports it — add a button with provider "apple" to re-enable). */}
           <Button
             title="Continue with Google"
             variant="secondary"
