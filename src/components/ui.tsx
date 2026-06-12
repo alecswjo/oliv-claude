@@ -158,8 +158,8 @@ export function EmptyState({ emoji, title, body, action }: { emoji: string; titl
   );
 }
 
-export function Divider() {
-  return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.line }} />;
+export function Divider({ style }: { style?: StyleProp<ViewStyle> }) {
+  return <View style={[{ height: StyleSheet.hairlineWidth, backgroundColor: colors.line }, style]} />;
 }
 
 const styles = StyleSheet.create({

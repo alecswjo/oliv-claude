@@ -21,7 +21,6 @@ export function UserRow({
 }) {
   return (
     <Pressable
-      accessibilityRole="button"
       accessibilityLabel={`${user.displayName}, @${user.username}`}
       onPress={onPress}
       style={({ pressed }) => [styles.row, pressed && { opacity: 0.92 }]}>
