@@ -3,6 +3,7 @@ import { dayKeyFromIso } from '@/domain/dates';
 import { longestStreak } from '@/domain/streaks';
 import type { Meal, NutritionFacts } from '@/domain/types';
 import { loadJson } from '@/services/storage';
+import * as sync from '@/services/sync';
 import { createPersister } from './persist';
 import { useUserStore } from './userStore';
 
@@ -31,6 +32,7 @@ interface MealState {
   hydrated: boolean;
 
   hydrate(): Promise<void>;
+  replaceAll(meals: Meal[]): void;
   addMeal(meal: Meal): void;
   updateMeal(id: string, patch: MealEditPatch): void;
   deleteMeal(id: string): void;
@@ -63,8 +65,14 @@ export const useMealStore = create<MealState>()((set, get) => {
       set({ meals: saved?.meals ?? [], hydrated: true });
     },
 
+    /** Replace local meals with a server-loaded set (backend hydrate; no push-back). */
+    replaceAll(meals: Meal[]) {
+      setMeals(meals, { affectsStreak: true });
+    },
+
     addMeal(meal) {
       setMeals([meal, ...get().meals], { affectsStreak: true });
+      sync.pushNewMeal(meal);
     },
 
     updateMeal(id, patch) {
@@ -79,16 +87,21 @@ export const useMealStore = create<MealState>()((set, get) => {
         };
       });
       setMeals(meals);
+      sync.pushMealUpdate(id, patch);
     },
 
     deleteMeal(id) {
-      setMeals(get().meals.filter((meal) => meal.id !== id), { affectsStreak: true });
+      const meal = get().meals.find((m) => m.id === id);
+      setMeals(get().meals.filter((m) => m.id !== id), { affectsStreak: true });
+      if (meal) sync.pushMealDelete(meal);
     },
 
     toggleOlive(mealId, userId) {
+      let nowActive = false;
       const meals = get().meals.map((meal) => {
         if (meal.id !== mealId) return meal;
         const has = meal.oliveUserIds.includes(userId);
+        nowActive = !has;
         return {
           ...meal,
           oliveUserIds: has
@@ -97,6 +110,7 @@ export const useMealStore = create<MealState>()((set, get) => {
         };
       });
       setMeals(meals);
+      sync.pushOlive(mealId, userId, nowActive);
     },
 
     addComment(mealId, comment) {
@@ -104,6 +118,7 @@ export const useMealStore = create<MealState>()((set, get) => {
         meal.id === mealId ? { ...meal, comments: [...meal.comments, comment] } : meal,
       );
       setMeals(meals);
+      sync.pushComment(mealId, comment);
     },
 
     deleteComment(mealId, commentId) {
@@ -113,6 +128,7 @@ export const useMealStore = create<MealState>()((set, get) => {
           : meal,
       );
       setMeals(meals);
+      sync.pushCommentDelete(commentId);
     },
 
     reset() {

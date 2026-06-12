@@ -319,8 +319,12 @@ export default function LogMealScreen() {
             <Text style={type.heading}>Health Score</Text>
             {!isManual ? (
               <Text style={type.tiny}>
-                {outcome?.analyzerUsed === 'claude' ? 'Analyzed by Claude' : 'Offline estimate'} ·{' '}
-                {confidence} confidence
+                {outcome?.analyzerUsed === 'proxy'
+                  ? 'Analyzed by AI'
+                  : outcome?.analyzerUsed === 'claude'
+                    ? 'Analyzed by Claude'
+                    : 'Offline estimate'}{' '}
+                · {confidence} confidence
               </Text>
             ) : (
               <Text style={type.tiny}>Manual entry</Text>

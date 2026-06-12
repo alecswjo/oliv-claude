@@ -3,6 +3,7 @@ import { newId } from '@/domain/ids';
 import type { BodyProfile, Goals, UserProfile } from '@/domain/types';
 import { DEFAULT_GOALS } from '@/domain/types';
 import { loadJson } from '@/services/storage';
+import * as sync from '@/services/sync';
 import { createPersister } from './persist';
 
 /** Current-user profile & onboarding state — spec §F1. */
@@ -18,6 +19,8 @@ interface UserState {
   hydrated: boolean;
 
   hydrate(): Promise<void>;
+  /** Adopt a server-loaded profile (backend hydrate; no push-back). */
+  adoptProfile(profile: UserProfile): void;
   completeOnboarding(input: {
     displayName: string;
     username: string;
@@ -48,9 +51,16 @@ export const useUserStore = create<UserState>()((set, get) => {
       set({ profile: saved?.profile ?? null, hydrated: true });
     },
 
+    adoptProfile(profile) {
+      set({ profile, hydrated: true });
+      persist();
+    },
+
     completeOnboarding(input) {
       const profile: UserProfile = {
-        id: newId('user'),
+        // In backend mode the id must be the authenticated user's id so RLS
+        // (id = auth.uid()) accepts the row; fall back to a local id offline.
+        id: sync.currentUserId() ?? newId('user'),
         username: input.username,
         displayName: input.displayName,
         avatarEmoji: input.avatarEmoji,
@@ -66,27 +76,34 @@ export const useUserStore = create<UserState>()((set, get) => {
       };
       set({ profile });
       persist();
+      sync.pushProfile(profile);
     },
 
     updateProfile(patch) {
       const profile = get().profile;
       if (!profile) return;
-      set({ profile: { ...profile, ...patch } });
+      const next = { ...profile, ...patch };
+      set({ profile: next });
       persist();
+      sync.pushProfile(next);
     },
 
     setGoals(goals, goalsAreDefault) {
       const profile = get().profile;
       if (!profile) return;
-      set({ profile: { ...profile, goals, goalsAreDefault } });
+      const next = { ...profile, goals, goalsAreDefault };
+      set({ profile: next });
       persist();
+      sync.pushProfile(next);
     },
 
     setBody(body) {
       const profile = get().profile;
       if (!profile) return;
-      set({ profile: { ...profile, body } });
+      const next = { ...profile, body };
+      set({ profile: next });
       persist();
+      sync.pushProfile(next);
     },
 
     setLongestStreak(value) {

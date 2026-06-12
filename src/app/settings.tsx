@@ -7,11 +7,13 @@ import { computeGoals, validateGoalOverride } from '@/domain/goals';
 import { testApiKey } from '@/services/analyzer/claudeAnalyzer';
 import { clearApiKey, getApiKey, maskKey, setApiKey } from '@/services/secureKey';
 import { resetAllStores, useAppStore } from '@/store/appStore';
+import { useAuthStore } from '@/store/authStore';
 import { useUserStore } from '@/store/userStore';
 
 /** Settings — spec §F7. */
 export default function SettingsScreen() {
   const router = useRouter();
+  const requiresAuth = useAuthStore((state) => state.requiresAuth);
   const profile = useUserStore((state) => state.profile);
   const updateProfile = useUserStore((state) => state.updateProfile);
   const setGoals = useUserStore((state) => state.setGoals);
@@ -211,9 +213,28 @@ export default function SettingsScreen() {
         {keyStatus ? <Text style={type.small}>{keyStatus}</Text> : null}
       </Card>
 
+      {requiresAuth ? (
+        <Button
+          title="Sign out"
+          variant="secondary"
+          onPress={() =>
+            Alert.alert('Sign out?', 'Your data stays safe on the server.', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Sign out',
+                onPress: async () => {
+                  await useAuthStore.getState().signOut();
+                  router.replace('/sign-in');
+                },
+              },
+            ])
+          }
+        />
+      ) : null}
+
       <Button title="Reset all data" variant="danger" onPress={confirmReset} />
       <Text style={[type.tiny, { textAlign: 'center' }]}>
-        Oliv v1 · demo build · AI estimates are approximations, not medical advice
+        Oliv v1 · AI estimates are approximations, not medical advice
       </Text>
     </ScrollView>
   );

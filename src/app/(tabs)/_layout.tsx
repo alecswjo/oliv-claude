@@ -2,6 +2,7 @@ import { Redirect, Tabs, useRouter } from 'expo-router';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '@/components/theme';
+import { useAuthStore } from '@/store/authStore';
 import { useUserStore } from '@/store/userStore';
 
 function TabGlyph({ glyph, label, focused }: { glyph: string; label: string; focused: boolean }) {
@@ -16,7 +17,13 @@ function TabGlyph({ glyph, label, focused }: { glyph: string; label: string; foc
 export default function TabsLayout() {
   const router = useRouter();
   const profile = useUserStore((state) => state.profile);
+  const requiresAuth = useAuthStore((state) => state.requiresAuth);
+  const authStatus = useAuthStore((state) => state.status);
 
+  // Backend mode: must be signed in before anything else.
+  if (requiresAuth && authStatus !== 'signedIn') {
+    return <Redirect href="/sign-in" />;
+  }
   if (!profile) {
     return <Redirect href="/onboarding" />;
   }
