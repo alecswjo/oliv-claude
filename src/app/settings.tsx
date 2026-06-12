@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { confirmDestructive } from '@/components/confirm';
 import { Button, Card, Chip, Field } from '@/components/ui';
 import { colors, spacing, type } from '@/components/theme';
 import { computeGoals, validateGoalOverride } from '@/domain/goals';
@@ -107,18 +108,16 @@ export default function SettingsScreen() {
   };
 
   const confirmReset = () => {
-    Alert.alert('Reset Oliv?', 'This clears your profile, meals, follows, and demo data.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Reset everything',
-        style: 'destructive',
-        onPress: () => {
-          resetAllStores();
-          router.dismissAll();
-          router.replace('/onboarding');
-        },
+    confirmDestructive({
+      title: 'Reset Oliv?',
+      message: 'This clears your profile, meals, follows, and demo data.',
+      confirmLabel: 'Reset everything',
+      onConfirm: () => {
+        resetAllStores();
+        if (router.canGoBack()) router.dismissAll();
+        router.replace('/onboarding');
       },
-    ]);
+    });
   };
 
   return (
@@ -218,16 +217,14 @@ export default function SettingsScreen() {
           title="Sign out"
           variant="secondary"
           onPress={() =>
-            Alert.alert('Sign out?', 'Your data stays safe on the server.', [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Sign out',
-                onPress: async () => {
-                  await useAuthStore.getState().signOut();
-                  router.replace('/sign-in');
-                },
+            confirmDestructive({
+              title: 'Sign out?',
+              message: 'Your data stays safe on the server.',
+              confirmLabel: 'Sign out',
+              onConfirm: () => {
+                void useAuthStore.getState().signOut().then(() => router.replace('/sign-in'));
               },
-            ])
+            })
           }
         />
       ) : null}
