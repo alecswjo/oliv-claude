@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
+import { Alert } from 'react-native';
 import { computeHealthScore } from '@/domain/healthScore';
 import type { Meal, MealAnalysis } from '@/domain/types';
 import { DEFAULT_GOALS } from '@/domain/types';
@@ -9,8 +10,9 @@ import { useSocialStore } from '@/store/socialStore';
 import { useUserStore } from '@/store/userStore';
 
 let mockMealId = 'own1';
+const mockBack = jest.fn();
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ canGoBack: () => true, push: jest.fn(), back: jest.fn(), replace: jest.fn() }),
+  useRouter: () => ({ push: jest.fn(), back: mockBack, replace: jest.fn(), canGoBack: jest.fn(() => true) }),
   useLocalSearchParams: () => ({ id: mockMealId }),
   Stack: { Screen: () => null },
 }));
@@ -19,6 +21,7 @@ jest.mock('@/services/photos', () => ({
   preparePhotoForAnalysis: jest.fn(),
   persistPhotos: jest.fn(),
   deletePhotos: jest.fn(),
+  deletePhotosForMeal: jest.fn(),
 }));
 
 import MealDetailScreen from '@/app/meal/[id]';
@@ -138,6 +141,21 @@ describe('Meal detail (spec §F4.4/F4.5/F2.8)', () => {
 
     await fireEvent(screen.getByLabelText('Private meal'), 'valueChange', true);
     expect(useMealStore.getState().meals[0].isPrivate).toBe(true);
+  });
+
+  it('deletes the meal after confirmation and navigates back', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+      buttons?.find((button) => button.style === 'destructive')?.onPress?.();
+    });
+    useMealStore.getState().addMeal(ownMeal());
+    await render(<MealDetailScreen />);
+
+    await fireEvent.press(screen.getByLabelText('Delete meal'));
+
+    expect(alertSpy).toHaveBeenCalled();
+    expect(useMealStore.getState().meals).toHaveLength(0);
+    expect(mockBack).toHaveBeenCalled();
+    alertSpy.mockRestore();
   });
 
   it('renders demo meals read-only (no edit/delete affordances)', async () => {

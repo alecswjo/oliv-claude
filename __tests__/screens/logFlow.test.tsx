@@ -6,8 +6,10 @@ import { useMealStore } from '@/store/mealStore';
 import { useUserStore } from '@/store/userStore';
 
 const mockBack = jest.fn();
+const mockReplace = jest.fn();
+const mockCanGoBack = jest.fn(() => true);
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ canGoBack: () => true, push: jest.fn(), back: mockBack, replace: jest.fn() }),
+  useRouter: () => ({ push: jest.fn(), back: mockBack, replace: mockReplace, canGoBack: mockCanGoBack }),
 }));
 
 jest.mock('expo-image-picker', () => ({
@@ -33,6 +35,7 @@ function seedProfile() {
 
 beforeEach(async () => {
   await AsyncStorage.clear();
+  jest.clearAllMocks();
   useMealStore.setState({ meals: [], hydrated: true });
   useUserStore.setState({ profile: null, hydrated: true });
   seedProfile();
@@ -120,6 +123,33 @@ describe('Log meal flow (spec J2 / §13.2)', () => {
     expect(meal.source).toBe('manual');
     expect(meal.confidence).toBe('high'); // spec F2.7
     expect(meal.foodItems).toEqual(['leftover pasta']);
+  });
+
+  it('only saves one meal no matter how many times Save is pressed', async () => {
+    await render(<LogMealScreen />);
+    await fireEvent.changeText(screen.getByLabelText('What did you eat?'), 'salmon');
+    await fireEvent.press(screen.getByLabelText('Analyze'));
+    await screen.findByText(/Offline estimate/);
+
+    await fireEvent.press(screen.getByLabelText('Save meal'));
+    await fireEvent.press(screen.getByLabelText('Save meal'));
+    await fireEvent.press(screen.getByLabelText('Save meal'));
+
+    expect(useMealStore.getState().meals).toHaveLength(1);
+  });
+
+  it('falls back to the home feed when there is no history to go back to (web refresh)', async () => {
+    mockCanGoBack.mockReturnValueOnce(false);
+    await render(<LogMealScreen />);
+    await fireEvent.changeText(screen.getByLabelText('What did you eat?'), 'salmon');
+    await fireEvent.press(screen.getByLabelText('Analyze'));
+    await screen.findByText(/Offline estimate/);
+
+    await fireEvent.press(screen.getByLabelText('Save meal'));
+
+    expect(useMealStore.getState().meals).toHaveLength(1);
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(mockReplace).toHaveBeenCalledWith('/');
   });
 
   it('refuses to save zero-calorie entries', async () => {

@@ -3,6 +3,7 @@ import React, { useMemo } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { Flame } from '@/components/Icon';
 import { MealCard } from '@/components/MealCard';
+import { useSafeBack } from '@/components/navigation';
 import { UserAvatar } from '@/components/UserAvatar';
 import { Button, Card, EmptyState } from '@/components/ui';
 import { colors, fonts, scoreColor, spacing, type } from '@/components/theme';
@@ -17,6 +18,7 @@ import { useUserStore } from '@/store/userStore';
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const goBack = useSafeBack();
 
   const profile = useUserStore((state) => state.profile);
   const demoUsers = useSocialStore((state) => state.demoUsers);
@@ -44,7 +46,7 @@ export default function UserProfileScreen() {
     return (
       <View style={styles.missing}>
         <Text style={type.heading}>User not found</Text>
-        <Button title="Go back" variant="secondary" onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} />
+        <Button title="Go back" variant="secondary" onPress={goBack} />
       </View>
     );
   }

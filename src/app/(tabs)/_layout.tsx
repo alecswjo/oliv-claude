@@ -84,11 +84,19 @@ export default function TabsLayout() {
       }}>
       <Tabs.Screen
         name="index"
-        options={{ title: 'Oliv', tabBarIcon: ({ focused }) => <TabGlyph icon="home" label="Feed" focused={focused} /> }}
+        options={{
+          title: 'Oliv',
+          tabBarAccessibilityLabel: 'Feed tab',
+          tabBarIcon: ({ focused }) => <TabGlyph icon="home" label="Feed" focused={focused} />,
+        }}
       />
       <Tabs.Screen
         name="social"
-        options={{ title: 'Social', tabBarIcon: ({ focused }) => <TabGlyph icon="users" label="Social" focused={focused} /> }}
+        options={{
+          title: 'Social',
+          tabBarAccessibilityLabel: 'Social tab',
+          tabBarIcon: ({ focused }) => <TabGlyph icon="users" label="Social" focused={focused} />,
+        }}
       />
       <Tabs.Screen
         name="log-tab"
@@ -115,11 +123,19 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="progress"
-        options={{ title: 'Progress', tabBarIcon: ({ focused }) => <TabGlyph icon="bar-chart-2" label="Progress" focused={focused} /> }}
+        options={{
+          title: 'Progress',
+          tabBarAccessibilityLabel: 'Progress tab',
+          tabBarIcon: ({ focused }) => <TabGlyph icon="bar-chart-2" label="Progress" focused={focused} />,
+        }}
       />
       <Tabs.Screen
         name="profile"
-        options={{ title: 'Profile', tabBarIcon: ({ focused }) => <TabGlyph icon="user" label="Profile" focused={focused} /> }}
+        options={{
+          title: 'Profile',
+          tabBarAccessibilityLabel: 'Profile tab',
+          tabBarIcon: ({ focused }) => <TabGlyph icon="user" label="Profile" focused={focused} />,
+        }}
       />
     </Tabs>
   );
