@@ -1,2 +1,71 @@
-# oliv-claude
-# oliv-codex
+# Oliv 🫒
+
+**A social, AI-powered healthy-food tracker for iOS.** Snap a photo of your meal — Oliv estimates the calories and macros, scores how healthy it is out of 5 olives, and shares it (if you want) with the people who follow you.
+
+> Snap. Score. Share.
+
+| | |
+|---|---|
+| **Platform** | iOS (Expo SDK 56 / React Native 0.85 / TypeScript strict) |
+| **AI** | Claude (`claude-opus-4-8`) vision + structured outputs, with a deterministic offline estimator as demo mode & fallback |
+| **State** | Zustand + AsyncStorage (local-first), SecureStore for the API key |
+| **Tests** | 258 Jest tests — domain, services, stores, components, and screen flows |
+
+---
+
+## What it does
+
+- **Photo-first logging (Cal AI-style).** Photo and/or a one-line description → calories, protein/carbs/fat, fiber/sugar/sodium/saturated fat, detected food items, and a confidence level. Everything is editable before saving.
+- **Health Score (1–5 olives).** A deterministic, explainable rule-based score — protein & fiber density, fruit/veg servings, processing level (NOVA-inspired), sugar/sodium/saturated-fat load, and portion size. Every score ships with a factor-by-factor breakdown ("Excellent protein +0.8", "Ultra-processed −0.9"). The algorithm is spec'd normatively in [`docs/PRODUCT_SPEC.md` §6](docs/PRODUCT_SPEC.md) and locked by reference tests.
+- **My Feed (main page).** Daily summary — calorie dial, macro bars, streak, average score — above a day-grouped timeline of your meals.
+- **Social.** Follow people, browse what they eat, give olives 🫒 and comment. Ships with 10 seeded demo eaters (with ~2 weeks of deterministic meal history) so the feed is alive on first run. Per-meal privacy keeps any meal off the social surfaces.
+- **Progress.** Streaks (current & longest), 7-day calorie chart vs target, 7-day average score.
+- **Goal engine.** Mifflin-St Jeor BMR × activity ± goal → calorie target; protein 1.6 g/kg (clamped 20–35% of calories), fat 27.5%, carbs the remainder. Manual override with validation.
+
+## Demo mode vs Claude mode
+
+Oliv is fully usable **offline with no API key**: a deterministic keyword estimator (~60-food lexicon, quantity modifiers, meal-type fallbacks) powers analysis. Add an Anthropic API key in **Settings → Claude AI analysis** and meal photos are analyzed by `claude-opus-4-8` with a strict JSON schema (`output_config.format`); any Claude failure falls back to the estimator with a notice.
+
+> ⚠️ **Demo architecture:** the app calls Anthropic directly with a user-supplied key (kept in the iOS Keychain). A production/App Store release must proxy through a backend that owns the key — `MealAnalyzer` in `src/services/analyzer/` is the seam where that swaps in. See spec §7.2.
+
+## Running it
+
+```bash
+npm install
+npx expo start        # then press i for the iOS simulator, or scan with Expo Go
+```
+
+The repo was built and tested in a Linux CI environment (no Xcode), so verification there is:
+
+```bash
+npm test              # full Jest suite (jest-expo)
+npm run typecheck     # tsc --noEmit (strict)
+npx expo export --platform web   # full Metro bundle of every route
+```
+
+## Project layout
+
+```
+docs/                 PRODUCT_SPEC.md · SPEC_REVIEW.md · IMPLEMENTATION_PLAN.md
+src/
+  domain/             pure logic: health score, goals, validation, streaks, summaries, dates
+  services/           analyzer (claude + estimator + provider), seeds, storage, photos, secureKey
+  store/              zustand stores: user, meals, social, app (+ pure selectors)
+  components/         theme + UI kit + feature components
+  app/                expo-router routes (tabs, log modal, meal/user detail, settings, onboarding)
+__tests__/            mirrors src; 258 tests
+```
+
+**Layering rule:** `app → components → store → services → domain`; `domain/` imports nothing above it.
+
+## The Health Score, briefly
+
+Every meal starts at **3.0**. Positive factors: protein share of energy (≤ +0.8), fiber per 100 kcal (≤ +0.7), fruit/veg servings (≤ +0.6), whole foods (+0.4). Negative: sugar per 100 kcal (≥ −1.0), ultra-processing (−0.9), sodium (≥ −0.6), saturated fat (≥ −0.6), oversized meals (≥ −0.4). Clamped 1–5, rounded to 0.5 (ties up), accumulated in integer hundredths so floating point can never flip a tie. Grilled salmon + quinoa + broccoli → **5.0**; a glazed donut + latte → **1.0**.
+
+## Docs
+
+- [`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md) — full product spec (v1.2, normative)
+- [`docs/SPEC_REVIEW.md`](docs/SPEC_REVIEW.md) — the 20-finding pre-implementation review and resolutions
+- [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — architecture, build order, test plan
+
+*AI nutrition estimates are approximations, not medical advice.*

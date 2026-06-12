@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "Oliv",
+    "slug": "oliv",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "oliv",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "bundleIdentifier": "app.oliv.tracker",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Oliv uses the camera so you can snap a photo of your meal for AI analysis.",
+        "NSPhotoLibraryUsageDescription": "Oliv lets you pick meal photos from your library for AI analysis."
+      }
+    },
+    "android": {
+      "package": "app.oliv.tracker",
+      "adaptiveIcon": {
+        "backgroundColor": "#FAF7F0",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FAF7F0",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 140
+        }
+      ],
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
