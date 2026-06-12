@@ -190,4 +190,5 @@ create or replace view profile_stats as
     (select count(*) from follows f where f.follower_id  = p.id) as following,
     (select count(*) from meals m where m.user_id = p.id)        as meal_count,
     (select round(avg(m.health_score_value)::numeric, 1)
-       from meals m where m.user_id = p.id)                      as avg_score;
+       from meals m where m.user_id = p.id)                      as avg_score
+  from profiles p;

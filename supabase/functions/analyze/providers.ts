@@ -108,7 +108,11 @@ async function analyzeWithOpenAI(input: AnalyzeInput): Promise<RawMealAnalysis> 
         type: 'json_schema',
         json_schema: { name: 'meal_analysis', strict: true, schema: ANALYSIS_JSON_SCHEMA },
       },
-      max_completion_tokens: 1200,
+      // gpt-5.5 is a reasoning model: at default effort an image request can
+      // spend the whole completion budget on reasoning and return empty
+      // content (finish_reason "length"). Low effort answers this task well.
+      reasoning_effort: 'low',
+      max_completion_tokens: 4000,
     }),
   });
 
