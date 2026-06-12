@@ -16,11 +16,13 @@ iOS social food tracker (Expo SDK 56, RN 0.85, React 19, TS strict, expo-router 
 - Stores persist via the microtask-coalesced `createPersister`; tests await `flushPersistence()`.
 - Demo/social content is seeded **once** (`seedIfNeeded`) with stable IDs and persisted; never regenerate over existing data.
 - Backend (Supabase) is **optional and gated** on `isBackendConfigured()` (the two `EXPO_PUBLIC_SUPABASE_*` env vars). When unset, the app is fully local/offline and the Supabase SDK must never load. Keep all Supabase access behind `src/services/sync.ts` (push helpers + `backendActive()`), which dynamic-imports `src/services/supabase/*`. Don't statically import the Supabase client from anything in the test/offline graph (analyzers, stores) — `proxyAnalyzer` and `sync` lazy-load it on purpose.
-- The LLM key is **server-side** in `supabase/functions/analyze` (OpenAI gpt-5.5, provider-pluggable). The app calls the proxy via `ProxyMealAnalyzer`; precedence is `proxy → local Claude key → estimator`. `supabase/` is excluded from the app `tsconfig` (it's Deno).
+- The LLM key is **server-side** in `supabase/functions/analyze` (OpenAI gpt-5.5, provider-pluggable). The app calls the proxy via `ProxyMealAnalyzer`; precedence is `proxy → offline estimator` (the in-app Claude analyzer was removed). Meals carry up to 5 photos (`Meal.photoUris`, DB `photo_paths text[]`). `supabase/` is excluded from the app `tsconfig` (it's Deno).
+- React Native Web gotchas the UI must respect: `Alert.alert` with buttons is a silent no-op (use `src/services/confirm.ts`), `blob:` URIs die on reload (photos persist as data URIs on web via `persistPhotos`), and a Pressable with `accessibilityRole="button"` must never wrap another button.
 
 ## Gotchas (hard-won)
 - `@testing-library/react-native` v14: `render` and `fireEvent.*` are **async** — always `await` them.
 - TypeScript 6: `@types/*` are not auto-included; `tsconfig.json` lists `"types": ["jest", "node"]`.
 - `npx expo install` can't reach the Expo versions API on this network — pin versions from `node_modules/expo/bundledNativeModules.json` and plain `npm install` instead.
 - expo-file-system uses the new `File`/`Paths` class API (`copySync`, `.exists`, `.delete()`); expo-image-manipulator uses the context API (`ImageManipulator.manipulate(...).renderAsync()` → `saveAsync`).
-- The Claude analyzer model id is `claude-opus-4-8` with `output_config.format` structured outputs — both verified current; don't "fix" them to older patterns.
+- gpt-5.5 is a reasoning model: image requests need `reasoning_effort: 'low'` + a generous `max_completion_tokens` or the whole budget burns on reasoning and content comes back empty (`finish_reason: "length"`).
+- Jest can't run native dynamic `import()`; `babel.config.js` compiles it to `require()` in the test env only.

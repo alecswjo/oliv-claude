@@ -92,7 +92,7 @@ export class EstimateMealAnalyzer implements MealAnalyzer {
 
   async analyze(input: AnalyzeInput): Promise<MealAnalysis> {
     const description = input.description?.trim() ?? '';
-    if (!description && !input.photoBase64) {
+    if (!description && !input.photos?.length) {
       throw new AnalyzerError('empty-input', 'Add a photo or a description to analyze.');
     }
 

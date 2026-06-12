@@ -9,7 +9,7 @@
 // Secrets: supabase secrets set OPENAI_API_KEY=sk-...  (OPENAI_MODEL optional)
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { analyze, ProviderError, type AnalyzeInput } from './providers.ts';
+import { analyze, MAX_PHOTOS, ProviderError, type AnalyzeInput } from './providers.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -42,9 +42,23 @@ Deno.serve(async (req) => {
   let input: AnalyzeInput;
   try {
     const body = await req.json();
+    const photos = (Array.isArray(body.photos) ? body.photos : [])
+      .filter((p: unknown): p is { base64: string; mediaType?: string } =>
+        typeof (p as { base64?: unknown })?.base64 === 'string')
+      .slice(0, MAX_PHOTOS)
+      .map((p) => ({
+        base64: p.base64,
+        mediaType: typeof p.mediaType === 'string' ? p.mediaType : 'image/jpeg',
+      }));
+    // Back-compat: older clients send a single photoBase64.
+    if (photos.length === 0 && typeof body.photoBase64 === 'string') {
+      photos.push({
+        base64: body.photoBase64,
+        mediaType: typeof body.photoMediaType === 'string' ? body.photoMediaType : 'image/jpeg',
+      });
+    }
     input = {
-      photoBase64: typeof body.photoBase64 === 'string' ? body.photoBase64 : undefined,
-      photoMediaType: body.photoMediaType,
+      photos,
       description: typeof body.description === 'string' ? body.description : undefined,
       mealType: body.mealType,
     };

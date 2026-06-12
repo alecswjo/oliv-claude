@@ -12,8 +12,8 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { isBackendConfigured } from '@/config';
 import { colors } from '@/components/theme';
-import { getApiKey } from '@/services/secureKey';
-import { hydrateAll, useAppStore } from '@/store/appStore';
+import { ToastHost } from '@/components/ToastHost';
+import { hydrateAll } from '@/store/appStore';
 import { useAuthStore } from '@/store/authStore';
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -33,8 +33,6 @@ export default function RootLayout() {
     let mounted = true;
     (async () => {
       await hydrateAll();
-      const key = await getApiKey();
-      useAppStore.getState().setHasApiKey(Boolean(key));
 
       // Backend mode: resolve the session and, if signed in, load the user's
       // profile + meals from the server before the gate renders.
@@ -81,6 +79,7 @@ export default function RootLayout() {
         <Stack.Screen name="user/[id]" options={{ title: '' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings' }} />
       </Stack>
+      <ToastHost />
     </>
   );
 }

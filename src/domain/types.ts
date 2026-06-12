@@ -45,7 +45,8 @@ export interface Comment {
 export interface Meal {
   id: string;
   userId: string;
-  photoUri?: string;
+  /** Up to 5 photos; the first is the hero. Empty/undefined => emoji tile. */
+  photoUris?: string[];
   emoji?: string;
   description: string;
   mealType: MealType;

@@ -58,15 +58,33 @@ export function flushSync(): Promise<void> {
   return queue;
 }
 
-/** Insert the meal row and, when the photo is a local file, mirror it to Storage. */
-async function insertMealWithPhoto(meal: Meal): Promise<void> {
+/**
+ * Insert the meal row and mirror its local photos to Storage. After upload,
+ * the permanent public URLs are written back into the local store (no
+ * push-back), so the photos keep rendering across reloads — local blob:/data:
+ * URIs on web either die with the page or bloat localStorage.
+ */
+async function insertMealWithPhotos(meal: Meal): Promise<void> {
   const repo = await import('@/services/supabase/repo');
   await repo.insertMeal(meal);
-  if (meal.photoUri && isLocalUri(meal.photoUri)) {
-    const photos = await import('@/services/supabase/photos');
-    const path = await photos.uploadMealPhoto({ fileUri: meal.photoUri }, meal.userId, meal.id);
-    await repo.setMealPhotoPath(meal.id, path);
+  const localUris = (meal.photoUris ?? []).filter(isLocalUri);
+  if (localUris.length === 0) return;
+
+  const photos = await import('@/services/supabase/photos');
+  const paths: string[] = [];
+  for (const [index, uri] of localUris.entries()) {
+    paths.push(await photos.uploadMealPhoto({ fileUri: uri }, meal.userId, meal.id, index));
   }
+  await repo.setMealPhotoPaths(meal.id, paths);
+
+  const { useMealStore } = await import('@/store/mealStore');
+  useMealStore.getState().adoptPhotoUris(meal.id, paths.map(repo.publicPhotoUrl));
+}
+
+/** Every storage path a meal's photos may live at (indexed + legacy single). */
+function mealPhotoPaths(meal: Meal): string[] {
+  const indexed = (meal.photoUris ?? []).map((_, i) => `${meal.userId}/${meal.id}-${i}.jpg`);
+  return [...indexed, `${meal.userId}/${meal.id}.jpg`];
 }
 
 export function pushNewMeal(meal: Meal): void {
@@ -77,7 +95,7 @@ export function pushNewMeal(meal: Meal): void {
     const { useUserStore } = await import('@/store/userStore');
     const profile = useUserStore.getState().profile;
     if (profile) await repo.upsertProfile(profile).catch(logSyncError('ensureProfile'));
-    await insertMealWithPhoto(meal);
+    await insertMealWithPhotos(meal);
   });
 }
 
@@ -93,7 +111,7 @@ export function pushMealDelete(meal: Meal): void {
     const repo = await import('@/services/supabase/repo');
     await repo.deleteMeal(meal.id);
     const photos = await import('@/services/supabase/photos');
-    await photos.deleteMealPhoto(`${meal.userId}/${meal.id}.jpg`);
+    await photos.deleteMealPhotos(mealPhotoPaths(meal));
   });
 }
 
@@ -167,15 +185,19 @@ export async function hydrateForUser(userId: string): Promise<{ hasProfile: bool
     .getState()
     .meals.filter((meal) => !serverIds.has(meal.id))
     .map((meal) => ({ ...meal, userId }));
-  if (profile) {
-    for (const meal of localOnly) {
-      await insertMealWithPhoto(meal).catch(logSyncError('hydrate.pushLocalMeal'));
-    }
-  }
 
   const merged = [...localOnly, ...serverMeals].sort((a, b) =>
     a.loggedAt < b.loggedAt ? 1 : -1,
   );
+  // Replace BEFORE re-pushing: the photo upload inside insertMealWithPhotos
+  // writes permanent URLs back into the store, which a later replaceAll would
+  // clobber with the stale local URIs.
   useMealStore.getState().replaceAll(merged);
+
+  if (profile) {
+    for (const meal of localOnly) {
+      await insertMealWithPhotos(meal).catch(logSyncError('hydrate.pushLocalMeal'));
+    }
+  }
   return { hasProfile: profile != null };
 }

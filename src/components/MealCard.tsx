@@ -85,8 +85,16 @@ export function MealCard({
       </View>
 
       {/* hero */}
-      {meal.photoUri ? (
-        <Image source={{ uri: meal.photoUri }} style={styles.photo} contentFit="cover" accessibilityLabel="Meal photo" />
+      {meal.photoUris?.length ? (
+        <View>
+          <Image source={{ uri: meal.photoUris[0] }} style={styles.photo} contentFit="cover" accessibilityLabel="Meal photo" />
+          {meal.photoUris.length > 1 ? (
+            <View style={styles.photoCountBadge}>
+              <Icon name="layers" size={12} color={colors.surface} />
+              <Text style={styles.photoCountText}>{meal.photoUris.length}</Text>
+            </View>
+          ) : null}
+        </View>
       ) : (
         <View style={styles.emojiTile}>
           <Text style={{ fontSize: 44 }}>{meal.emoji ?? '🍽️'}</Text>
@@ -134,6 +142,19 @@ const styles = StyleSheet.create({
   },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(2.5) },
   photo: { width: '100%', aspectRatio: 16 / 10, borderRadius: radius.md, backgroundColor: colors.oliveSoft },
+  photoCountBadge: {
+    position: 'absolute',
+    top: spacing(2.5),
+    right: spacing(2.5),
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(26,28,23,0.72)',
+    borderRadius: radius.full,
+    paddingHorizontal: spacing(2.5),
+    paddingVertical: spacing(1),
+  },
+  photoCountText: { color: colors.surface, fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
   emojiTile: {
     width: '100%',
     aspectRatio: 16 / 10,

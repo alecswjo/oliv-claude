@@ -17,8 +17,8 @@ jest.mock('expo-router', () => ({
 
 jest.mock('@/services/photos', () => ({
   preparePhotoForAnalysis: jest.fn(),
-  persistPhoto: jest.fn(),
-  deletePhoto: jest.fn(),
+  persistPhotos: jest.fn(),
+  deletePhotos: jest.fn(),
 }));
 
 import MealDetailScreen from '@/app/meal/[id]';

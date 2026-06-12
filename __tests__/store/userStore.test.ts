@@ -15,7 +15,7 @@ beforeEach(async () => {
     seeded: false, demoUsers: [], demoMeals: [],
     followingIds: [], followerIds: [], hydrated: false,
   });
-  useAppStore.setState({ units: 'metric', hydrated: false, hasApiKey: false });
+  useAppStore.setState({ units: 'metric', hydrated: false });
 });
 
 describe('userStore onboarding', () => {

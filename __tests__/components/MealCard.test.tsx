@@ -57,7 +57,7 @@ describe('MealCard', () => {
   });
 
   it('falls back to an emoji tile when there is no photo', async () => {
-    await render(<MealCard meal={meal({ emoji: '🥣', photoUri: undefined })} isOwn oliveActive={false} />);
+    await render(<MealCard meal={meal({ emoji: '🥣', photoUris: undefined })} isOwn oliveActive={false} />);
     expect(screen.getByText('🥣')).toBeTruthy();
   });
 

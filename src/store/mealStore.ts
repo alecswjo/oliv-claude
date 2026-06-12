@@ -33,6 +33,8 @@ interface MealState {
 
   hydrate(): Promise<void>;
   replaceAll(meals: Meal[]): void;
+  /** Swap a meal's photo URIs in place WITHOUT a sync push (post-upload write-back). */
+  adoptPhotoUris(id: string, photoUris: string[]): void;
   addMeal(meal: Meal): void;
   updateMeal(id: string, patch: MealEditPatch): void;
   deleteMeal(id: string): void;
@@ -61,13 +63,22 @@ export const useMealStore = create<MealState>()((set, get) => {
     hydrated: false,
 
     async hydrate() {
-      const saved = await loadJson<{ meals: Meal[] }>(STORE_NAME);
-      set({ meals: saved?.meals ?? [], hydrated: true });
+      const saved = await loadJson<{ meals: (Meal & { photoUri?: string })[] }>(STORE_NAME);
+      // Back-compat: meals persisted before multi-photo had a single photoUri.
+      const meals = (saved?.meals ?? []).map(({ photoUri, ...meal }) => ({
+        ...meal,
+        photoUris: meal.photoUris ?? (photoUri ? [photoUri] : undefined),
+      }));
+      set({ meals, hydrated: true });
     },
 
     /** Replace local meals with a server-loaded set (backend hydrate; no push-back). */
     replaceAll(meals: Meal[]) {
       setMeals(meals, { affectsStreak: true });
+    },
+
+    adoptPhotoUris(id, photoUris) {
+      setMeals(get().meals.map((meal) => (meal.id === id ? { ...meal, photoUris } : meal)));
     },
 
     addMeal(meal) {

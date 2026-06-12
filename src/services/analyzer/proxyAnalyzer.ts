@@ -30,7 +30,7 @@ export class ProxyMealAnalyzer implements MealAnalyzer {
 
   async analyze(input: AnalyzeInput): Promise<MealAnalysis> {
     const description = input.description?.trim() ?? '';
-    if (!description && !input.photoBase64) {
+    if (!description && !input.photos?.length) {
       throw new AnalyzerError('empty-input', 'Add a photo or a description to analyze.');
     }
 
@@ -49,8 +49,7 @@ export class ProxyMealAnalyzer implements MealAnalyzer {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          photoBase64: input.photoBase64,
-          photoMediaType: input.photoMediaType,
+          photos: input.photos,
           description: description || undefined,
           mealType: input.mealType,
         }),

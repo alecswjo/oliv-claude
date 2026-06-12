@@ -18,8 +18,8 @@ jest.mock('expo-image-picker', () => ({
 
 jest.mock('@/services/photos', () => ({
   preparePhotoForAnalysis: jest.fn(),
-  persistPhoto: jest.fn((uri: string) => uri),
-  deletePhoto: jest.fn(),
+  persistPhotos: jest.fn((photos: { uri: string }[]) => photos.map((p) => p.uri)),
+  deletePhotos: jest.fn(),
 }));
 
 import LogMealScreen from '@/app/log';
@@ -46,7 +46,7 @@ describe('Log meal flow (spec J2 / §13.2)', () => {
       screen.getByLabelText('What did you eat?'),
       'grilled chicken with brown rice and broccoli',
     );
-    await fireEvent.press(screen.getByLabelText('Analyze with AI'));
+    await fireEvent.press(screen.getByLabelText('Analyze'));
 
     // Review phase — estimator result (no API key configured)
     expect(await screen.findByText(/Offline estimate · medium confidence/)).toBeTruthy();
@@ -71,7 +71,7 @@ describe('Log meal flow (spec J2 / §13.2)', () => {
     await render(<LogMealScreen />);
 
     await fireEvent.changeText(screen.getByLabelText('What did you eat?'), 'donut');
-    await fireEvent.press(screen.getByLabelText('Analyze with AI'));
+    await fireEvent.press(screen.getByLabelText('Analyze'));
     await screen.findByText(/Offline estimate/);
 
     // Donut alone: ultra-processed (−0.9), sugary (−0.6), fatty (−0.35) → 1.15 → 1.0
@@ -97,7 +97,7 @@ describe('Log meal flow (spec J2 / §13.2)', () => {
 
   it('blocks analysis with no photo and no description', async () => {
     await render(<LogMealScreen />);
-    await fireEvent.press(screen.getByLabelText('Analyze with AI'));
+    await fireEvent.press(screen.getByLabelText('Analyze'));
     expect(screen.getByText('Add a photo or describe your meal first.')).toBeTruthy();
     expect(useMealStore.getState().meals).toHaveLength(0);
   });
@@ -136,7 +136,7 @@ describe('Log meal flow (spec J2 / §13.2)', () => {
     expect(await screen.findByText(/Camera access is off/)).toBeTruthy();
     // description path still works
     await fireEvent.changeText(screen.getByLabelText('What did you eat?'), 'apple');
-    await fireEvent.press(screen.getByLabelText('Analyze with AI'));
+    await fireEvent.press(screen.getByLabelText('Analyze'));
     expect(await screen.findByText(/Offline estimate/)).toBeTruthy();
   });
 
@@ -144,7 +144,7 @@ describe('Log meal flow (spec J2 / §13.2)', () => {
     useUserStore.getState().updateProfile({ defaultPrivate: true });
     await render(<LogMealScreen />);
     await fireEvent.changeText(screen.getByLabelText('What did you eat?'), 'salmon');
-    await fireEvent.press(screen.getByLabelText('Analyze with AI'));
+    await fireEvent.press(screen.getByLabelText('Analyze'));
     await screen.findByText(/Offline estimate/);
     await fireEvent.press(screen.getByLabelText('Save meal'));
     expect(useMealStore.getState().meals[0].isPrivate).toBe(true);
