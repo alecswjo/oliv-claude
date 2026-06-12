@@ -1,7 +1,10 @@
 import { analyzeFunctionUrl } from '@/config';
 import { validateAnalysis } from '@/domain/nutritionValidation';
 import type { MealAnalysis } from '@/domain/types';
-import { AnalyzerError, type AnalyzeInput, type MealAnalyzer } from './types';
+import { AnalyzerError, type AnalyzeInput, type AnalyzeOptions, type MealAnalyzer } from './types';
+
+/** A hung request must settle so the estimator fallback can kick in. */
+const REQUEST_TIMEOUT_MS = 45_000;
 
 // Lazy so the Supabase SDK is only loaded when the proxy actually runs
 // (keeps it out of the offline/test module graph).
@@ -28,7 +31,7 @@ export class ProxyMealAnalyzer implements MealAnalyzer {
     } = {},
   ) {}
 
-  async analyze(input: AnalyzeInput): Promise<MealAnalysis> {
+  async analyze(input: AnalyzeInput, opts: AnalyzeOptions = {}): Promise<MealAnalysis> {
     const description = input.description?.trim() ?? '';
     if (!description && !input.photos?.length) {
       throw new AnalyzerError('empty-input', 'Add a photo or a description to analyze.');
@@ -43,6 +46,13 @@ export class ProxyMealAnalyzer implements MealAnalyzer {
       throw new AnalyzerError('auth', 'Sign in to analyze meals with AI.');
     }
 
+    // Deadline + user cancel, composed without AbortSignal.any (Hermes).
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const onExternalAbort = () => controller.abort();
+    opts.signal?.addEventListener('abort', onExternalAbort);
+    if (opts.signal?.aborted) controller.abort();
+
     let response: Response;
     try {
       response = await fetchFn(url, {
@@ -53,9 +63,19 @@ export class ProxyMealAnalyzer implements MealAnalyzer {
           description: description || undefined,
           mealType: input.mealType,
         }),
+        signal: controller.signal,
       });
     } catch (error) {
+      if (opts.signal?.aborted) {
+        throw new AnalyzerError('cancelled', 'Analysis cancelled.');
+      }
+      if (controller.signal.aborted) {
+        throw new AnalyzerError('network', 'The analysis timed out.');
+      }
       throw new AnalyzerError('network', `Could not reach the Oliv server: ${(error as Error).message}`);
+    } finally {
+      clearTimeout(timer);
+      opts.signal?.removeEventListener('abort', onExternalAbort);
     }
 
     if (response.status === 401 || response.status === 403) {

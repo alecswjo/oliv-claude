@@ -13,14 +13,23 @@ import React, { useEffect, useState } from 'react';
 import { isBackendConfigured } from '@/config';
 import { colors } from '@/components/theme';
 import { ToastHost } from '@/components/ToastHost';
+import { onSaveError } from '@/services/storage';
 import { hydrateAll } from '@/store/appStore';
 import { useAuthStore } from '@/store/authStore';
+import { showToast } from '@/store/toastStore';
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 
+// Deep links (oliv://meal/…) land on top of the tabs instead of dead-ending.
+export const unstable_settings = { initialRouteName: '(tabs)' };
+
+onSaveError(() => {
+  showToast("Couldn't save to this device — storage may be full");
+});
+
 export default function RootLayout() {
   const [hydrated, setHydrated] = useState(false);
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     'Grove-Display': SpaceGrotesk_700Bold,
     'Grove-DisplayMed': SpaceGrotesk_500Medium,
     'Grove-Sans': HankenGrotesk_400Regular,
@@ -32,27 +41,36 @@ export default function RootLayout() {
   useEffect(() => {
     let mounted = true;
     (async () => {
-      await hydrateAll();
+      try {
+        await hydrateAll();
 
-      // Backend mode: resolve the session and, if signed in, load the user's
-      // profile + meals from the server before the gate renders.
-      if (isBackendConfigured()) {
-        await useAuthStore.getState().init();
-        const userId = useAuthStore.getState().userId;
-        if (userId) {
-          const { hydrateForUser } = await import('@/services/sync');
-          await hydrateForUser(userId).catch(() => {});
+        // Backend mode: resolve the session and, if signed in, load the user's
+        // profile + meals from the server before the gate renders.
+        if (isBackendConfigured()) {
+          await useAuthStore.getState().init();
+          const userId = useAuthStore.getState().userId;
+          if (userId) {
+            const { hydrateForUser } = await import('@/services/sync');
+            await hydrateForUser(userId).catch(() => {
+              useAuthStore.getState().setHydrateFailed(true);
+            });
+          }
         }
+      } catch (error) {
+        // Never strand the user on the splash screen — local mode still works.
+        // eslint-disable-next-line no-console
+        console.warn('[oliv] startup hydration failed', error);
+      } finally {
+        if (mounted) setHydrated(true);
       }
-
-      if (mounted) setHydrated(true);
     })();
     return () => {
       mounted = false;
     };
   }, []);
 
-  const ready = hydrated && fontsLoaded;
+  // A font failure must not strand the splash either — system fonts render.
+  const ready = hydrated && (fontsLoaded || fontError != null);
 
   useEffect(() => {
     if (ready) void SplashScreen.hideAsync().catch(() => {});

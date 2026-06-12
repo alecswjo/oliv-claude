@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { isBackendConfigured } from '@/config';
 import type { Comment, Meal, UserProfile } from '@/domain/types';
 import { buildSeedMeals } from '@/services/seed/seedMeals';
 import { buildSeedUsers, SEED_FOLLOWER_IDS } from '@/services/seed/seedUsers';
@@ -19,6 +20,8 @@ interface PersistedSocial {
   demoMeals: Meal[];
   followingIds: string[];
   followerIds: string[];
+  /** Users this account has blocked — their content is filtered everywhere. */
+  blockedIds: string[];
 }
 
 interface SocialState extends PersistedSocial {
@@ -30,6 +33,9 @@ interface SocialState extends PersistedSocial {
   follow(userId: string): void;
   unfollow(userId: string): void;
   isFollowing(userId: string): boolean;
+  block(userId: string): void;
+  unblock(userId: string): void;
+  isBlocked(userId: string): boolean;
   /** Routes to demo meals or the user's own meals automatically. */
   toggleOlive(mealId: string, byUserId: string): void;
   addComment(mealId: string, comment: Comment): void;
@@ -40,8 +46,8 @@ interface SocialState extends PersistedSocial {
 
 export const useSocialStore = create<SocialState>()((set, get) => {
   const persist = createPersister<PersistedSocial>(STORE_NAME, () => {
-    const { seeded, demoUsers, demoMeals, followingIds, followerIds } = get();
-    return { seeded, demoUsers, demoMeals, followingIds, followerIds };
+    const { seeded, demoUsers, demoMeals, followingIds, followerIds, blockedIds } = get();
+    return { seeded, demoUsers, demoMeals, followingIds, followerIds, blockedIds };
   });
 
   const mutateDemoMeal = (mealId: string, fn: (meal: Meal) => Meal): boolean => {
@@ -58,12 +64,13 @@ export const useSocialStore = create<SocialState>()((set, get) => {
     demoMeals: [],
     followingIds: [],
     followerIds: [],
+    blockedIds: [],
     hydrated: false,
 
     async hydrate() {
       const saved = await loadJson<PersistedSocial>(STORE_NAME);
       if (saved?.seeded) {
-        set({ ...saved, hydrated: true });
+        set({ ...saved, blockedIds: saved.blockedIds ?? [], hydrated: true });
       } else {
         set({ hydrated: true });
       }
@@ -76,7 +83,10 @@ export const useSocialStore = create<SocialState>()((set, get) => {
         demoUsers: buildSeedUsers(anchor.toISOString()),
         demoMeals: buildSeedMeals(anchor),
         followingIds: [],
-        followerIds: [...SEED_FOLLOWER_IDS],
+        // Baseline demo followers only make sense in the local demo experience;
+        // with a real backend the user's follower count must be honest (zero).
+        followerIds: isBackendConfigured() ? [] : [...SEED_FOLLOWER_IDS],
+        blockedIds: [],
       });
       persist();
     },
@@ -95,6 +105,26 @@ export const useSocialStore = create<SocialState>()((set, get) => {
 
     isFollowing(userId) {
       return get().followingIds.includes(userId);
+    },
+
+    block(userId) {
+      const { blockedIds, followingIds } = get();
+      if (blockedIds.includes(userId)) return;
+      // Blocking also unfollows — their content disappears immediately.
+      set({
+        blockedIds: [...blockedIds, userId],
+        followingIds: followingIds.filter((id) => id !== userId),
+      });
+      persist();
+    },
+
+    unblock(userId) {
+      set({ blockedIds: get().blockedIds.filter((id) => id !== userId) });
+      persist();
+    },
+
+    isBlocked(userId) {
+      return get().blockedIds.includes(userId);
     },
 
     toggleOlive(mealId, byUserId) {
@@ -133,6 +163,7 @@ export const useSocialStore = create<SocialState>()((set, get) => {
         demoMeals: [],
         followingIds: [],
         followerIds: [],
+        blockedIds: [],
         hydrated: true,
       });
       persist();
@@ -148,19 +179,28 @@ export function selectSocialFeed(args: {
   ownMeals: Meal[];
   followingIds: string[];
   meId: string | undefined;
+  blockedIds?: string[];
 }): Meal[] {
   const followed = new Set(args.followingIds);
-  const fromDemos = args.demoMeals.filter((meal) => followed.has(meal.userId) && !meal.isPrivate);
+  const blocked = new Set(args.blockedIds ?? []);
+  const fromDemos = args.demoMeals.filter(
+    (meal) => followed.has(meal.userId) && !meal.isPrivate && !blocked.has(meal.userId),
+  );
   const fromMe = args.meId ? args.ownMeals.filter((meal) => !meal.isPrivate) : [];
   return [...fromDemos, ...fromMe].sort(
     (a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime(),
   );
 }
 
-/** Discover — spec §F4.3: demo users not yet followed. */
-export function selectDiscoverUsers(demoUsers: UserProfile[], followingIds: string[]): UserProfile[] {
+/** Discover — spec §F4.3: demo users not yet followed (or blocked). */
+export function selectDiscoverUsers(
+  demoUsers: UserProfile[],
+  followingIds: string[],
+  blockedIds: string[] = [],
+): UserProfile[] {
   const followed = new Set(followingIds);
-  return demoUsers.filter((user) => !followed.has(user.id));
+  const blocked = new Set(blockedIds);
+  return demoUsers.filter((user) => !followed.has(user.id) && !blocked.has(user.id));
 }
 
 /** Follower/following counts — spec §F4.6. */

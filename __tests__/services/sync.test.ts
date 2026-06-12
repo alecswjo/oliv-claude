@@ -74,8 +74,10 @@ const meal = { id: 'm1', userId: 'u1' } as Meal;
 
 let warnSpy: jest.SpyInstance;
 
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
+  sync.resetPendingForTests();
+  await (await import('@react-native-async-storage/async-storage')).default.clear();
   mockConfigured = false;
   useAuthStore.setState({ status: 'signedOut', userId: null, requiresAuth: false });
   useUserStore.setState({ profile: null, hydrated: true });
@@ -188,9 +190,37 @@ describe('push queue', () => {
 
     expect(mocked.setOlive).toHaveBeenCalledWith('m1', 'auth-1', true);
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('pushMealUpdate failed'),
+      expect.stringContaining('mealUpdate failed'),
       expect.any(Error),
     );
+  });
+
+  it('queues a transiently-failed op and replays it on the next push', async () => {
+    signIn();
+    mocked.updateMeal.mockRejectedValueOnce(new Error('network down'));
+    mocked.updateMeal.mockResolvedValue(undefined);
+    mocked.setOlive.mockResolvedValue(undefined);
+
+    sync.pushMealUpdate('m1', { isPrivate: true });
+    await sync.flushSync();
+    expect(sync.pendingOpCount()).toBe(1);
+
+    // The next push drains the log first — the edit lands, not reverts.
+    sync.pushOlive('m1', 'auth-1', true);
+    await sync.flushSync();
+    expect(sync.pendingOpCount()).toBe(0);
+    expect(mocked.updateMeal).toHaveBeenCalledTimes(2);
+    expect(mocked.updateMeal).toHaveBeenLastCalledWith('m1', { isPrivate: true });
+  });
+
+  it('drops permanently-failed ops (SQLSTATE errors) instead of retrying forever', async () => {
+    signIn();
+    const pgError = Object.assign(new Error('duplicate key'), { code: '23505' });
+    mocked.setOlive.mockRejectedValue(pgError);
+
+    sync.pushOlive('m1', 'auth-1', true);
+    await sync.flushSync();
+    expect(sync.pendingOpCount()).toBe(0);
   });
 });
 

@@ -7,6 +7,7 @@ import type {
   ProcessingLevel,
   UserProfile,
 } from '@/domain/types';
+import { DEFAULT_GOALS } from '@/domain/types';
 
 /** Database row shapes (snake_case), mirroring supabase/migrations/0001_schema.sql. */
 
@@ -21,6 +22,17 @@ export interface ProfileRow {
   goals_are_default: boolean;
   body: UserProfile['body'] | null;
   default_private: boolean;
+  created_at: string;
+}
+
+/** The world-readable projection (`public_profiles` view) — no health data. */
+export interface PublicProfileRow {
+  id: string;
+  username: string;
+  display_name: string;
+  avatar_emoji: string;
+  avatar_color: string;
+  bio: string;
   created_at: string;
 }
 
@@ -80,6 +92,24 @@ export function rowToProfile(row: ProfileRow): UserProfile {
     body: row.body ?? undefined,
     defaultPrivate: row.default_private,
     longestStreak: 0, // computed client-side from meal history
+    isDemo: false,
+  };
+}
+
+/** Other users' profiles: goals/body are private, so fill neutral defaults. */
+export function rowToPublicProfile(row: PublicProfileRow): UserProfile {
+  return {
+    id: row.id,
+    username: row.username,
+    displayName: row.display_name,
+    avatarEmoji: row.avatar_emoji,
+    avatarColor: row.avatar_color,
+    bio: row.bio,
+    joinedAt: row.created_at,
+    goals: DEFAULT_GOALS,
+    goalsAreDefault: true,
+    defaultPrivate: false,
+    longestStreak: 0,
     isDemo: false,
   };
 }
@@ -152,7 +182,9 @@ export function mealToInsert(meal: Meal): Omit<MealRow, 'olives' | 'comments'> {
   };
 }
 
-export function profileToUpsert(profile: UserProfile): ProfileRow {
+/** `created_at` is intentionally omitted — the DB default owns it; resending
+ *  it would let the client forge its join date (and overwrite it on every save). */
+export function profileToUpsert(profile: UserProfile): Omit<ProfileRow, 'created_at'> {
   return {
     id: profile.id,
     username: profile.username,
@@ -164,6 +196,5 @@ export function profileToUpsert(profile: UserProfile): ProfileRow {
     goals_are_default: profile.goalsAreDefault,
     body: profile.body ?? null,
     default_private: profile.defaultPrivate,
-    created_at: profile.joinedAt,
   };
 }

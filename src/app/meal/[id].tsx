@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { CommentList } from '@/components/CommentList';
 import { HealthScoreBadge } from '@/components/HealthScoreBadge';
 import { Icon } from '@/components/Icon';
@@ -128,7 +128,11 @@ export default function MealDetailScreen() {
   ];
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 96 : 0}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Card style={{ gap: spacing(3) }}>
         <View style={styles.authorRow}>
           <UserAvatar
@@ -258,7 +262,7 @@ export default function MealDetailScreen() {
           onDelete={(commentId) => deleteComment(meal.id, commentId)}
           onSubmit={(text) =>
             addComment(meal.id, {
-              id: newId('comment'),
+              id: newId(),
               userId: profile.id,
               text,
               createdAt: new Date().toISOString(),
@@ -274,6 +278,7 @@ export default function MealDetailScreen() {
         </>
       ) : null}
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

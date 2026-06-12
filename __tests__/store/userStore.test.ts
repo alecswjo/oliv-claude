@@ -95,7 +95,10 @@ describe('hydrateAll / resetAllStores', () => {
     resetAllStores();
     expect(useUserStore.getState().profile).toBeNull();
     expect(useMealStore.getState().meals).toEqual([]);
-    expect(useSocialStore.getState().seeded).toBe(false);
+    // Reset re-seeds demo content immediately so Social isn't empty until restart.
+    expect(useSocialStore.getState().seeded).toBe(true);
+    expect(useSocialStore.getState().demoUsers).toHaveLength(10);
+    expect(useSocialStore.getState().followingIds).toEqual([]);
   });
 });
 

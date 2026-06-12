@@ -1,10 +1,46 @@
 import { Redirect, Tabs, useRouter } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon, type IconName } from '@/components/Icon';
-import { colors, elevation, fonts } from '@/components/theme';
+import { Button } from '@/components/ui';
+import { colors, elevation, fonts, spacing, type } from '@/components/theme';
 import { useAuthStore } from '@/store/authStore';
 import { useUserStore } from '@/store/userStore';
+
+/**
+ * Shown when the user is signed in but their server profile couldn't be
+ * loaded. Routing to onboarding here would let them create a fresh profile
+ * that overwrites their real one — so we make them retry instead.
+ */
+function HydrateRetry() {
+  const [busy, setBusy] = useState(false);
+  const retry = async () => {
+    setBusy(true);
+    try {
+      const userId = useAuthStore.getState().userId;
+      if (userId) {
+        const { hydrateForUser } = await import('@/services/sync');
+        await hydrateForUser(userId);
+        useAuthStore.getState().setHydrateFailed(false);
+      }
+    } catch {
+      // stay on the retry screen
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <View style={styles.retryScreen}>
+      <Icon name="cloud-off" size={40} color={colors.ink30} />
+      <Text style={type.heading}>Couldn't load your data</Text>
+      <Text style={[type.small, { textAlign: 'center' }]}>
+        Check your connection and try again.
+      </Text>
+      <Button title="Retry" loading={busy} onPress={retry} />
+      <Button title="Sign out" variant="ghost" onPress={() => useAuthStore.getState().signOut()} />
+    </View>
+  );
+}
 
 function TabGlyph({ icon, label, focused }: { icon: IconName; label: string; focused: boolean }) {
   return (
@@ -20,12 +56,14 @@ export default function TabsLayout() {
   const profile = useUserStore((state) => state.profile);
   const requiresAuth = useAuthStore((state) => state.requiresAuth);
   const authStatus = useAuthStore((state) => state.status);
+  const hydrateFailed = useAuthStore((state) => state.hydrateFailed);
 
   // Backend mode: must be signed in before anything else.
   if (requiresAuth && authStatus !== 'signedIn') {
     return <Redirect href="/sign-in" />;
   }
   if (!profile) {
+    if (requiresAuth && hydrateFailed) return <HydrateRetry />;
     return <Redirect href="/onboarding" />;
   }
 
@@ -88,6 +126,14 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
+  retryScreen: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing(3),
+    padding: spacing(8),
+    backgroundColor: colors.paper,
+  },
   tabItem: { alignItems: 'center', gap: 3, width: 64 },
   tabLabel: { fontFamily: fonts.sansSemi, fontSize: 10, color: colors.ink30, letterSpacing: 0.2 },
   logButtonWrap: { alignItems: 'center', justifyContent: 'center' },

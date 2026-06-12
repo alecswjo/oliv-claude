@@ -7,9 +7,11 @@ import {
   rowToComment,
   rowToMeal,
   rowToProfile,
+  rowToPublicProfile,
   type CommentRow,
   type MealRow,
   type ProfileRow,
+  type PublicProfileRow,
 } from './types';
 
 const PHOTO_BUCKET = 'meal-photos';
@@ -43,8 +45,9 @@ export async function upsertProfile(profile: UserProfile): Promise<void> {
 }
 
 export async function usernameAvailable(username: string): Promise<boolean> {
+  // public_profiles, not profiles: profile rows are owner-only under RLS.
   const { data, error } = await client()
-    .from('profiles')
+    .from('public_profiles')
     .select('id')
     .eq('username', username.toLowerCase())
     .maybeSingle();
@@ -215,13 +218,50 @@ export async function fetchStats(profileId: string): Promise<ProfileStats> {
   };
 }
 
-/** Suggested users to follow: profiles excluding self + already-followed. */
+/** Suggested users to follow: public profiles excluding self + already-followed. */
 export async function fetchDiscover(excludeIds: string[], limit = 25): Promise<UserProfile[]> {
-  let query = client().from('profiles').select('*').limit(limit);
+  let query = client().from('public_profiles').select('*').limit(limit);
   if (excludeIds.length > 0) {
-    query = query.not('id', 'in', `(${excludeIds.join(',')})`);
+    // Quote each id — unquoted values would corrupt the PostgREST filter list.
+    query = query.not('id', 'in', `(${excludeIds.map((id) => `"${id}"`).join(',')})`);
   }
   const { data, error } = await query;
   if (error) throw error;
-  return (data as ProfileRow[]).map(rowToProfile);
+  return (data as PublicProfileRow[]).map(rowToPublicProfile);
+}
+
+/** Fetch another user's public profile (no goals/body — those are owner-only). */
+export async function fetchPublicProfile(id: string): Promise<UserProfile | null> {
+  const { data, error } = await client()
+    .from('public_profiles')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? rowToPublicProfile(data as PublicProfileRow) : null;
+}
+
+/* ----------------------------- trust & safety ---------------------------- */
+
+export async function reportContent(
+  reporterId: string,
+  subjectType: 'meal' | 'comment' | 'user',
+  subjectId: string,
+  reason: string,
+): Promise<void> {
+  const { error } = await client().from('reports').insert({
+    reporter_id: reporterId,
+    subject_type: subjectType,
+    subject_id: subjectId,
+    reason: reason.slice(0, 500),
+  });
+  if (error) throw error;
+}
+
+export async function setBlocked(blockerId: string, blockedId: string, on: boolean): Promise<void> {
+  const db = client();
+  const { error } = on
+    ? await db.from('blocks').upsert({ blocker_id: blockerId, blocked_id: blockedId })
+    : await db.from('blocks').delete().eq('blocker_id', blockerId).eq('blocked_id', blockedId);
+  if (error) throw error;
 }

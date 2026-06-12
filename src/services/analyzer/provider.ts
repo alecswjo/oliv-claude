@@ -2,7 +2,12 @@ import { isBackendConfigured } from '@/config';
 import type { MealAnalysis } from '@/domain/types';
 import { EstimateMealAnalyzer } from './estimateAnalyzer';
 import { ProxyMealAnalyzer } from './proxyAnalyzer';
-import { AnalyzerError, type AnalyzeInput, type MealAnalyzer } from './types';
+import {
+  AnalyzerError,
+  type AnalyzeInput,
+  type AnalyzeOptions,
+  type MealAnalyzer,
+} from './types';
 
 /**
  * Analyzer selection & fallback — spec §F2.5.
@@ -23,7 +28,7 @@ export interface AnalysisOutcome {
   fallbackNotice?: string;
 }
 
-export interface AnalyzerDeps {
+export interface AnalyzerDeps extends AnalyzeOptions {
   /** Defaults to whether a Supabase backend is configured. */
   useBackend?: boolean;
   makeProxy?(): MealAnalyzer;
@@ -50,10 +55,19 @@ export async function runAnalysis(
 
   const makeProxy = deps.makeProxy ?? (() => new ProxyMealAnalyzer());
   try {
-    return { analysis: await makeProxy().analyze(input), analyzerUsed: 'proxy' };
+    return {
+      analysis: await makeProxy().analyze(input, { signal: deps.signal }),
+      analyzerUsed: 'proxy',
+    };
   } catch (error) {
-    // Empty input is a user error, not an analyzer failure — never fall back.
-    if (error instanceof AnalyzerError && error.code === 'empty-input') throw error;
+    // Empty input is a user error and a cancel is a user decision —
+    // neither falls back to the estimator.
+    if (
+      error instanceof AnalyzerError &&
+      (error.code === 'empty-input' || error.code === 'cancelled')
+    ) {
+      throw error;
+    }
     const code = error instanceof AnalyzerError ? error.code : 'network';
     const analysis = await makeEstimator().analyze(input);
     return {

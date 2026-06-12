@@ -15,16 +15,26 @@ interface AuthState {
   userId: string | null;
   email?: string;
   requiresAuth: boolean;
+  /**
+   * True when the signed-in user's server state could not be loaded. While
+   * set, the app must NOT route to onboarding — completing onboarding would
+   * upsert a fresh profile over the user's real one.
+   */
+  hydrateFailed: boolean;
 
   init(): Promise<void>;
   setUser(user: { id: string; email?: string } | null): void;
+  setHydrateFailed(value: boolean): void;
   signOut(): Promise<void>;
 }
+
+let initialized = false;
 
 export const useAuthStore = create<AuthState>()((set, get) => ({
   status: isBackendConfigured() ? 'loading' : 'signedOut',
   userId: null,
   requiresAuth: isBackendConfigured(),
+  hydrateFailed: false,
 
   async init() {
     if (!isBackendConfigured()) {
@@ -32,7 +42,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       return;
     }
     const { currentUser, onAuthChange } = await import('@/services/supabase/auth');
-    onAuthChange((user) => get().setUser(user));
+    if (!initialized) {
+      initialized = true;
+      onAuthChange((user) => get().setUser(user));
+    }
     const user = await currentUser();
     get().setUser(user);
   },
@@ -45,19 +58,26 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     );
   },
 
+  setHydrateFailed(value) {
+    set({ hydrateFailed: value });
+  },
+
   async signOut() {
     if (isBackendConfigured()) {
       const { signOut } = await import('@/services/supabase/auth');
       await signOut();
       // Clear the local cache so another account signing in on this device
-      // doesn't inherit (and re-sync) the previous user's profile and meals.
-      const [{ useUserStore }, { useMealStore }] = await Promise.all([
+      // doesn't inherit (and re-sync) the previous user's data.
+      const [{ useUserStore }, { useMealStore }, { useSocialStore }] = await Promise.all([
         import('@/store/userStore'),
         import('@/store/mealStore'),
+        import('@/store/socialStore'),
       ]);
       useUserStore.getState().reset();
       useMealStore.getState().reset();
+      useSocialStore.getState().reset();
+      useSocialStore.getState().seedIfNeeded();
     }
-    set({ status: 'signedOut', userId: null, email: undefined });
+    set({ status: 'signedOut', userId: null, email: undefined, hydrateFailed: false });
   },
 }));

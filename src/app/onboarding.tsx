@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { UserAvatar } from '@/components/UserAvatar';
 import { Button, Card, Chip, Field } from '@/components/ui';
 import { colors, spacing, type } from '@/components/theme';
@@ -8,6 +8,7 @@ import { computeGoals, feetInchesToCm, lbsToKg, validateGoalOverride } from '@/d
 import type { ActivityLevel, BodyGoal, BodyProfile, Sex } from '@/domain/types';
 import { DEFAULT_GOALS } from '@/domain/types';
 import { isSeedUsernameTaken } from '@/services/seed/seedUsers';
+import { backendActive } from '@/services/sync';
 import { useAppStore } from '@/store/appStore';
 import { useUserStore } from '@/store/userStore';
 
@@ -44,6 +45,7 @@ export default function OnboardingScreen() {
   const [avatarEmoji, setAvatarEmoji] = useState(AVATAR_EMOJIS[0]);
   const [avatarColor, setAvatarColor] = useState(AVATAR_COLORS[0]);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [checkingName, setCheckingName] = useState(false);
 
   // Step 1 — body
   const [sex, setSex] = useState<Sex>('unspecified');
@@ -65,7 +67,7 @@ export default function OnboardingScreen() {
   const [targetsError, setTargetsError] = useState<string | null>(null);
   const [usedDefaults, setUsedDefaults] = useState(false);
 
-  const validateProfile = (): boolean => {
+  const validateProfile = async (): Promise<boolean> => {
     const name = displayName.trim();
     const handle = username.trim().toLowerCase();
     if (name.length < 1 || name.length > 30) {
@@ -79,6 +81,22 @@ export default function OnboardingScreen() {
     if (isSeedUsernameTaken(handle)) {
       setProfileError('That username is taken.');
       return false;
+    }
+    // Backend mode: a server-side collision would make the profile upsert fail
+    // silently later (unique constraint), leaving the user unsynced forever.
+    if (backendActive()) {
+      setCheckingName(true);
+      try {
+        const repo = await import('@/services/supabase/repo');
+        if (!(await repo.usernameAvailable(handle))) {
+          setProfileError('That username is taken.');
+          return false;
+        }
+      } catch {
+        // Offline: let onboarding proceed; the upsert retries via the op log.
+      } finally {
+        setCheckingName(false);
+      }
     }
     setProfileError(null);
     return true;
@@ -168,6 +186,9 @@ export default function OnboardingScreen() {
   );
 
   return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.hero}>
         <Text style={{ fontSize: 52 }}>🫒</Text>
@@ -205,8 +226,9 @@ export default function OnboardingScreen() {
           {profileError ? <Text style={styles.error}>{profileError}</Text> : null}
           <Button
             title="Continue"
-            onPress={() => {
-              if (validateProfile()) setStep(1);
+            loading={checkingName}
+            onPress={async () => {
+              if (await validateProfile()) setStep(1);
             }}
           />
         </Card>
@@ -307,6 +329,7 @@ export default function OnboardingScreen() {
         </Card>
       ) : null}
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

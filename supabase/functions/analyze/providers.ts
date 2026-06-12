@@ -103,33 +103,45 @@ async function analyzeWithOpenAI(input: AnalyzeInput): Promise<RawMealAnalysis> 
     });
   }
 
-  const res = await fetch(`${baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content },
-      ],
-      response_format: {
-        type: 'json_schema',
-        json_schema: { name: 'meal_analysis', strict: true, schema: ANALYSIS_JSON_SCHEMA },
-      },
-      // gpt-5.5 is a reasoning model: at default effort an image request can
-      // spend the whole completion budget on reasoning and return empty
-      // content (finish_reason "length"). Low effort answers this task well.
-      reasoning_effort: 'low',
-      max_completion_tokens: 4000,
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content },
+        ],
+        response_format: {
+          type: 'json_schema',
+          json_schema: { name: 'meal_analysis', strict: true, schema: ANALYSIS_JSON_SCHEMA },
+        },
+        // gpt-5.5 is a reasoning model: at default effort an image request can
+        // spend the whole completion budget on reasoning and return empty
+        // content (finish_reason "length"). Low effort answers this task well.
+        reasoning_effort: 'low',
+        max_completion_tokens: 4000,
+      }),
+      // A hung upstream must not pin the request until the runtime wall clock.
+      signal: AbortSignal.timeout(60_000),
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      throw new ProviderError('The analysis provider timed out', 504);
+    }
+    throw new ProviderError('Could not reach the analysis provider', 502);
+  }
 
   if (!res.ok) {
     const body = await res.text();
+    // Log upstream detail server-side only; clients get a generic message.
+    console.error(`OpenAI error ${res.status}: ${body.slice(0, 500)}`);
     if (res.status === 401 || res.status === 403) {
       throw new ProviderError('The configured OpenAI key was rejected', 500);
     }
-    throw new ProviderError(`OpenAI error ${res.status}: ${body.slice(0, 300)}`, 502);
+    throw new ProviderError('The analysis provider returned an error', 502);
   }
 
   const json = await res.json();

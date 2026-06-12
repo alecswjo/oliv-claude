@@ -60,7 +60,7 @@ export const useUserStore = create<UserState>()((set, get) => {
       const profile: UserProfile = {
         // In backend mode the id must be the authenticated user's id so RLS
         // (id = auth.uid()) accepts the row; fall back to a local id offline.
-        id: sync.currentUserId() ?? newId('user'),
+        id: sync.currentUserId() ?? newId(),
         username: input.username,
         displayName: input.displayName,
         avatarEmoji: input.avatarEmoji,

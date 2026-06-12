@@ -1,7 +1,7 @@
 import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { isBackendConfigured, SUPABASE_ANON_KEY, SUPABASE_URL } from '@/config';
 
 /**
@@ -25,6 +25,15 @@ export function getSupabase(): SupabaseClient | null {
         flowType: 'pkce',
       },
     });
+    // RN has no web visibility events: supabase-js needs to be told when the
+    // app foregrounds so the token auto-refresh timer keeps sessions alive.
+    if (Platform.OS !== 'web') {
+      const c = client;
+      AppState.addEventListener('change', (state) => {
+        if (state === 'active') c.auth.startAutoRefresh();
+        else c.auth.stopAutoRefresh();
+      });
+    }
   }
   return client;
 }

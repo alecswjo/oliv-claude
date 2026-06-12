@@ -15,6 +15,7 @@ import { useUserStore } from '@/store/userStore';
 export default function SignInScreen() {
   const router = useRouter();
   const authStatus = useAuthStore((state) => state.status);
+  const hydrateFailed = useAuthStore((state) => state.hydrateFailed);
   const profile = useUserStore((state) => state.profile);
   const [mode, setMode] = useState<'in' | 'up'>('in');
   const [email, setEmail] = useState('');
@@ -33,11 +34,18 @@ export default function SignInScreen() {
       setMode('in');
       return;
     }
-    const { useAuthStore } = await import('@/store/authStore');
     useAuthStore.getState().setUser(user);
     const { hydrateForUser } = await import('@/services/sync');
-    const { hasProfile } = await hydrateForUser(user.id);
-    router.replace(hasProfile ? '/(tabs)' : '/onboarding');
+    try {
+      const { hasProfile } = await hydrateForUser(user.id);
+      useAuthStore.getState().setHydrateFailed(false);
+      router.replace(hasProfile ? '/(tabs)' : '/onboarding');
+    } catch {
+      // Never route to onboarding on a failed load — completing it would
+      // overwrite the user's real server profile. The tabs gate shows retry.
+      useAuthStore.getState().setHydrateFailed(true);
+      router.replace('/(tabs)');
+    }
   };
 
   const submitEmail = async () => {
@@ -81,8 +89,9 @@ export default function SignInScreen() {
 
   // Already signed in with nothing in flight (e.g. landing back here after the
   // web OAuth redirect, where the root layout restored the session): move on.
+  // When the server load failed, the tabs gate owns the retry — not onboarding.
   if (authStatus === 'signedIn' && busy === null) {
-    return <Redirect href={profile ? '/(tabs)' : '/onboarding'} />;
+    return <Redirect href={profile || hydrateFailed ? '/(tabs)' : '/onboarding'} />;
   }
 
   return (

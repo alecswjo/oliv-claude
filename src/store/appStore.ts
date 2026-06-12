@@ -58,4 +58,7 @@ export function resetAllStores(): void {
   useMealStore.getState().reset();
   useSocialStore.getState().reset();
   useUserStore.getState().reset();
+  // Re-seed immediately: without this the Social tab stays empty (with a
+  // misleading "you follow everyone" state) until the next full app launch.
+  useSocialStore.getState().seedIfNeeded();
 }

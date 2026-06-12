@@ -1,8 +1,8 @@
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { HealthScoreBadge } from '@/components/HealthScoreBadge';
 import { Icon } from '@/components/Icon';
 import { ScoreBreakdown } from '@/components/ScoreBreakdown';
@@ -158,27 +158,37 @@ export default function LogMealScreen() {
     setPhotos((current) => current.filter((_, i) => i !== index));
   };
 
+  const abortRef = useRef<AbortController | null>(null);
+
   const analyze = async () => {
     setInputError(null);
     if (photos.length === 0 && description.trim().length === 0) {
       setInputError('Add a photo or describe your meal first.');
       return;
     }
+    const controller = new AbortController();
+    abortRef.current = controller;
     setAnalyzing(true);
     try {
-      const result = await runAnalysis({
-        photos: photos.map((photo) => ({ base64: photo.base64, mediaType: photo.mediaType })),
-        description: description.trim() || undefined,
-        mealType,
-      });
+      const result = await runAnalysis(
+        {
+          photos: photos.map((photo) => ({ base64: photo.base64, mediaType: photo.mediaType })),
+          description: description.trim() || undefined,
+          mealType,
+        },
+        { signal: controller.signal },
+      );
       enterReview(result.analysis, result, false);
     } catch (error) {
-      if (error instanceof AnalyzerError && error.code === 'empty-input') {
+      if (error instanceof AnalyzerError && error.code === 'cancelled') {
+        // User backed out — return to the compose form silently.
+      } else if (error instanceof AnalyzerError && error.code === 'empty-input') {
         setInputError(error.message);
       } else {
         setInputError('Analysis failed unexpectedly. You can still enter the meal manually.');
       }
     } finally {
+      abortRef.current = null;
       setAnalyzing(false);
     }
   };
@@ -190,7 +200,7 @@ export default function LogMealScreen() {
       return;
     }
 
-    const id = newId('meal');
+    const id = newId();
     const photoUris = photos.length > 0 ? persistPhotos(photos, id) : undefined;
 
     const meal: Meal = {
@@ -250,6 +260,7 @@ export default function LogMealScreen() {
         <Text style={[type.small, { textAlign: 'center' }]}>
           Identifying foods and estimating nutrition
         </Text>
+        <Button title="Cancel" variant="ghost" onPress={() => abortRef.current?.abort()} />
       </View>
     );
   }
@@ -379,6 +390,10 @@ export default function LogMealScreen() {
 
   /* ----------------------------- review phase ----------------------------- */
   return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}>
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {outcome?.fallbackNotice ? (
         <Card style={styles.noticeCard}>
@@ -496,6 +511,7 @@ export default function LogMealScreen() {
         }}
       />
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

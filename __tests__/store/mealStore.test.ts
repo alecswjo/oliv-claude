@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { newId } from '@/domain/ids';
 import type { Meal } from '@/domain/types';
 import { storageKey } from '@/services/storage';
 import { useMealStore } from '@/store/mealStore';
@@ -7,7 +8,7 @@ import { flushPersistence } from '@/store/persist';
 
 function makeMeal(overrides: Partial<Meal> = {}): Meal {
   return {
-    id: `meal_${Math.random().toString(36).slice(2)}`,
+    id: newId(),
     userId: 'me',
     description: 'lunch',
     mealType: 'lunch',
@@ -61,6 +62,20 @@ describe('mealStore CRUD', () => {
     await useMealStore.getState().hydrate();
     expect(useMealStore.getState().meals).toEqual([meal]);
     expect(useMealStore.getState().hydrated).toBe(true);
+  });
+
+  it('re-keys legacy non-uuid ids to uuids on hydrate (backend compatibility)', async () => {
+    const legacy = {
+      ...makeMeal(),
+      id: 'meal_mbnq3k2001abcde',
+      comments: [{ id: 'comment_legacy1', userId: 'me', text: 'hi', createdAt: '2026-06-10T12:00:00.000Z' }],
+    };
+    await AsyncStorage.setItem(storageKey('meals'), JSON.stringify({ meals: [legacy] }));
+    await useMealStore.getState().hydrate();
+    const [migrated] = useMealStore.getState().meals;
+    expect(migrated.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(migrated.comments[0].id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(migrated.description).toBe(legacy.description);
   });
 
   it('hydrates to empty state on corrupt storage', async () => {

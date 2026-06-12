@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { Button, Card, Chip, Field } from '@/components/ui';
 import { colors, spacing, type } from '@/components/theme';
 import { computeGoals, validateGoalOverride } from '@/domain/goals';
@@ -95,6 +95,10 @@ export default function SettingsScreen() {
   };
 
   return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 96 : 0}>
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Card style={{ gap: spacing(3) }}>
         <Text style={type.heading}>Profile</Text>
@@ -165,6 +169,7 @@ export default function SettingsScreen() {
         Oliv v1 · Nutrition estimates are approximations, not medical advice
       </Text>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

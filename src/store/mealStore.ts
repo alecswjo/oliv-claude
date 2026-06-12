@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { dayKeyFromIso } from '@/domain/dates';
+import { isUuid, newId } from '@/domain/ids';
 import { longestStreak } from '@/domain/streaks';
 import type { Meal, NutritionFacts } from '@/domain/types';
 import { loadJson } from '@/services/storage';
@@ -64,12 +65,17 @@ export const useMealStore = create<MealState>()((set, get) => {
 
     async hydrate() {
       const saved = await loadJson<{ meals: (Meal & { photoUri?: string })[] }>(STORE_NAME);
-      // Back-compat: meals persisted before multi-photo had a single photoUri.
+      // Back-compat: meals persisted before multi-photo had a single photoUri,
+      // and meals from before UUID ids carry `meal_…`/`comment_…` ids that the
+      // backend's uuid columns reject — re-key them once so they can sync.
       const meals = (saved?.meals ?? []).map(({ photoUri, ...meal }) => ({
         ...meal,
+        id: isUuid(meal.id) ? meal.id : newId(),
+        comments: meal.comments.map((c) => (isUuid(c.id) ? c : { ...c, id: newId() })),
         photoUris: meal.photoUris ?? (photoUri ? [photoUri] : undefined),
       }));
       set({ meals, hydrated: true });
+      if (meals.some((m, i) => m.id !== saved?.meals[i]?.id)) persist();
     },
 
     /** Replace local meals with a server-loaded set (backend hydrate; no push-back). */
@@ -87,6 +93,7 @@ export const useMealStore = create<MealState>()((set, get) => {
     },
 
     updateMeal(id, patch) {
+      if (!get().meals.some((meal) => meal.id === id)) return;
       const meals = get().meals.map((meal) => {
         if (meal.id !== id) return meal;
         const touchesAnalysis = ANALYSIS_FIELDS.some((field) => patch[field] !== undefined);
@@ -108,6 +115,7 @@ export const useMealStore = create<MealState>()((set, get) => {
     },
 
     toggleOlive(mealId, userId) {
+      if (!get().meals.some((meal) => meal.id === mealId)) return;
       let nowActive = false;
       const meals = get().meals.map((meal) => {
         if (meal.id !== mealId) return meal;
@@ -125,6 +133,7 @@ export const useMealStore = create<MealState>()((set, get) => {
     },
 
     addComment(mealId, comment) {
+      if (!get().meals.some((meal) => meal.id === mealId)) return;
       const meals = get().meals.map((meal) =>
         meal.id === mealId ? { ...meal, comments: [...meal.comments, comment] } : meal,
       );
@@ -133,6 +142,7 @@ export const useMealStore = create<MealState>()((set, get) => {
     },
 
     deleteComment(mealId, commentId) {
+      if (!get().meals.some((meal) => meal.id === mealId)) return;
       const meals = get().meals.map((meal) =>
         meal.id === mealId
           ? { ...meal, comments: meal.comments.filter((c) => c.id !== commentId) }

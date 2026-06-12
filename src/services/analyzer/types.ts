@@ -15,12 +15,23 @@ export interface AnalyzeInput {
   mealType: MealType;
 }
 
-export interface MealAnalyzer {
-  readonly kind: 'estimate' | 'proxy';
-  analyze(input: AnalyzeInput): Promise<MealAnalysis>;
+export interface AnalyzeOptions {
+  /** Abort the request (user cancel). Timeouts are the analyzer's own job. */
+  signal?: AbortSignal;
 }
 
-export type AnalyzerErrorCode = 'refusal' | 'parse' | 'network' | 'auth' | 'empty-input';
+export interface MealAnalyzer {
+  readonly kind: 'estimate' | 'proxy';
+  analyze(input: AnalyzeInput, opts?: AnalyzeOptions): Promise<MealAnalysis>;
+}
+
+export type AnalyzerErrorCode =
+  | 'refusal'
+  | 'parse'
+  | 'network'
+  | 'auth'
+  | 'empty-input'
+  | 'cancelled';
 
 export class AnalyzerError extends Error {
   readonly code: AnalyzerErrorCode;
