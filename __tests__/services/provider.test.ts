@@ -50,10 +50,10 @@ describe('runAnalysis', () => {
   });
 
   it.each([
-    ['network', /reach Claude/i],
+    ['network', /reach the analysis service/i],
     ['refusal', /couldn't analyze/i],
     ['parse', /didn't come through/i],
-    ['auth', /key was rejected/i],
+    ['auth', /sign-in needs attention/i],
   ] as const)('falls back to the estimator on Claude %s errors with low confidence', async (code, notice) => {
     const estimator = stubAnalyzer('estimate', async () => ESTIMATE_RESULT);
     const claude = stubAnalyzer('claude', async () => {
@@ -84,7 +84,7 @@ describe('runAnalysis', () => {
     });
 
     expect(outcome.analyzerUsed).toBe('estimate');
-    expect(outcome.fallbackNotice).toMatch(/reach Claude/i);
+    expect(outcome.fallbackNotice).toMatch(/reach the analysis service/i);
   });
 
   it('does NOT fall back on empty-input — that is a user error', async () => {

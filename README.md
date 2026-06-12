@@ -43,17 +43,30 @@ npm run typecheck     # tsc --noEmit (strict)
 npx expo export --platform web   # full Metro bundle of every route
 ```
 
+## Backend (production) mode
+
+By default Oliv runs fully **local/offline** (on-device storage, seeded demo
+social, AI key pasted in Settings). Configure a **Supabase** backend and it
+becomes a real multi-user app: accounts (Auth), meals/profile in **Postgres**,
+photos in **Storage**, and a server-side-key **proxy** so every analysis call
+uses *your* OpenAI key (the key never ships in the app). It's gated on two env
+vars — unset them and you're back to offline mode.
+
+- Deploy: `supabase/README.md` (db push → enable Email auth → set `OPENAI_API_KEY` + deploy the `analyze` function → fill `.env`).
+- Architecture & production roadmap: `docs/PRODUCTION.md`.
+
 ## Project layout
 
 ```
-docs/                 PRODUCT_SPEC.md · SPEC_REVIEW.md · IMPLEMENTATION_PLAN.md
+docs/                 PRODUCT_SPEC.md · SPEC_REVIEW.md · IMPLEMENTATION_PLAN.md · PRODUCTION.md
+supabase/             migrations (schema + RLS + storage) · functions/analyze (server-key proxy)
 src/
   domain/             pure logic: health score, goals, validation, streaks, summaries, dates
-  services/           analyzer (claude + estimator + provider), seeds, storage, photos, secureKey
-  store/              zustand stores: user, meals, social, app (+ pure selectors)
+  services/           analyzer (proxy + claude + estimator), supabase (data layer), sync, seeds, storage
+  store/              zustand stores: user, meals, social, app, auth (+ pure selectors)
   components/         theme + UI kit + feature components
-  app/                expo-router routes (tabs, log modal, meal/user detail, settings, onboarding)
-__tests__/            mirrors src; 258 tests
+  app/                expo-router routes (tabs, log, meal/user detail, settings, onboarding, sign-in)
+__tests__/            mirrors src; 279 tests
 ```
 
 **Layering rule:** `app → components → store → services → domain`; `domain/` imports nothing above it.

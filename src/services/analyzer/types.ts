@@ -9,7 +9,7 @@ export interface AnalyzeInput {
 }
 
 export interface MealAnalyzer {
-  readonly kind: 'claude' | 'estimate';
+  readonly kind: 'claude' | 'estimate' | 'proxy';
   analyze(input: AnalyzeInput): Promise<MealAnalysis>;
 }
 
