@@ -1,10 +1,11 @@
 import { Image } from 'expo-image';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { CommentList } from '@/components/CommentList';
 import { HealthScoreBadge } from '@/components/HealthScoreBadge';
 import { Icon } from '@/components/Icon';
+import { useSafeBack } from '@/components/navigation';
 import { ScoreBreakdown } from '@/components/ScoreBreakdown';
 import { UserAvatar } from '@/components/UserAvatar';
 import { Button, Card, Divider, Field, PressableScale } from '@/components/ui';
@@ -24,7 +25,7 @@ import { useUserStore } from '@/store/userStore';
 /** Meal detail — nutrition, score breakdown, olives & comments (spec §F3.3/F4.4/F4.5/F2.8). */
 export default function MealDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
+  const goBack = useSafeBack();
 
   const profile = useUserStore((state) => state.profile);
   const ownMeals = useMealStore((state) => state.meals);
@@ -60,7 +61,7 @@ export default function MealDetailScreen() {
     return (
       <View style={styles.missing}>
         <Text style={type.heading}>Meal not found</Text>
-        <Button title="Go back" variant="secondary" onPress={() => router.back()} />
+        <Button title="Go back" variant="secondary" onPress={goBack} />
       </View>
     );
   }
@@ -113,7 +114,7 @@ export default function MealDetailScreen() {
     deletePhotos(meal.photoUris);
     deleteMeal(meal.id);
     showToast('Meal deleted');
-    router.back();
+    goBack();
   };
 
   const nutritionRows: [string, string][] = [

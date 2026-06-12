@@ -10,13 +10,26 @@ import * as SplashScreen from 'expo-splash-screen';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
+import { Pressable } from 'react-native';
 import { isBackendConfigured } from '@/config';
+import { Icon } from '@/components/Icon';
+import { useSafeBack } from '@/components/navigation';
 import { colors } from '@/components/theme';
 import { ToastHost } from '@/components/ToastHost';
 import { hydrateAll } from '@/store/appStore';
 import { useAuthStore } from '@/store/authStore';
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
+
+/** Modal screens get no back chevron — always show an explicit close. */
+function HeaderClose() {
+  const goBack = useSafeBack();
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel="Close" hitSlop={12} onPress={goBack}>
+      <Icon name="x" size={24} color={colors.oliveDeep} />
+    </Pressable>
+  );
+}
 
 export default function RootLayout() {
   const [hydrated, setHydrated] = useState(false);
@@ -74,7 +87,10 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="sign-in" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
-        <Stack.Screen name="log" options={{ presentation: 'modal', title: 'Log a meal' }} />
+        <Stack.Screen
+          name="log"
+          options={{ presentation: 'modal', title: 'Log a meal', headerLeft: () => <HeaderClose /> }}
+        />
         <Stack.Screen name="meal/[id]" options={{ title: 'Meal' }} />
         <Stack.Screen name="user/[id]" options={{ title: '' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings' }} />

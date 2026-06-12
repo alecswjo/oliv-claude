@@ -74,7 +74,7 @@ export default function SettingsScreen() {
     setSigningOut(true);
     try {
       await useAuthStore.getState().signOut();
-      router.dismissAll();
+      if (router.canGoBack()) router.dismissAll();
       router.replace('/sign-in');
     } finally {
       setSigningOut(false);
@@ -90,7 +90,7 @@ export default function SettingsScreen() {
     });
     if (!ok) return;
     resetAllStores();
-    router.dismissAll();
+    if (router.canGoBack()) router.dismissAll();
     router.replace('/onboarding');
   };
 

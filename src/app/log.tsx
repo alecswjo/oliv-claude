@@ -1,10 +1,10 @@
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { HealthScoreBadge } from '@/components/HealthScoreBadge';
 import { Icon } from '@/components/Icon';
+import { useSafeBack } from '@/components/navigation';
 import { ScoreBreakdown } from '@/components/ScoreBreakdown';
 import { Button, Card, Chip, Divider, Field, PressableScale } from '@/components/ui';
 import { colors, MEAL_TYPE_EMOJI, MEAL_TYPE_LABELS, radius, spacing, type } from '@/components/theme';
@@ -62,7 +62,7 @@ const EMPTY_MANUAL: MealAnalysis = validateAnalysis({
 });
 
 export default function LogMealScreen() {
-  const router = useRouter();
+  const goBack = useSafeBack();
   const profile = useUserStore((state) => state.profile);
   const addMeal = useMealStore((state) => state.addMeal);
 
@@ -82,6 +82,10 @@ export default function LogMealScreen() {
   const [confidence, setConfidence] = useState<Confidence>('high');
   const [isPrivate, setIsPrivate] = useState(profile?.defaultPrivate ?? false);
   const [edited, setEdited] = useState(false);
+  const [saving, setSaving] = useState(false);
+  // Hard re-entry guard: even if navigation ever fails again, repeat taps on
+  // "Save meal" must not create duplicate meals.
+  const savedRef = useRef(false);
 
   const reviewing = fields !== null;
   const photoSlotsLeft = MAX_ANALYZE_PHOTOS - photos.length;
@@ -184,11 +188,14 @@ export default function LogMealScreen() {
   };
 
   const save = () => {
+    if (savedRef.current) return;
     if (!profile || !liveAnalysis || !liveScore) return;
     if (liveAnalysis.calories <= 0) {
       setInputError('Calories must be above zero to save.');
       return;
     }
+    savedRef.current = true;
+    setSaving(true);
 
     const id = newId('meal');
     const photoUris = photos.length > 0 ? persistPhotos(photos, id) : undefined;
@@ -223,7 +230,7 @@ export default function LogMealScreen() {
     };
 
     addMeal(meal);
-    router.back();
+    goBack();
   };
 
   const markEdited = () => setEdited(true);
@@ -485,7 +492,7 @@ export default function LogMealScreen() {
 
       {inputError ? <Text style={styles.error}>{inputError}</Text> : null}
 
-      <Button title="Save meal" onPress={save} />
+      <Button title="Save meal" onPress={save} loading={saving} />
       <Button
         title="Back"
         variant="ghost"
