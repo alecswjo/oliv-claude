@@ -16,3 +16,12 @@ jest.mock('expo-secure-store', () => {
     __reset: () => store.clear(),
   };
 });
+
+// Render icons as empty Text in tests (deterministic, no font loading).
+jest.mock('@expo/vector-icons', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+  const make = () => (props) =>
+    React.createElement(Text, { accessibilityLabel: props.accessibilityLabel, testID: props.testID });
+  return { Feather: make(), MaterialCommunityIcons: make() };
+});

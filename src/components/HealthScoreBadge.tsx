@@ -1,11 +1,11 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { scoreTone } from '@/domain/healthScore';
-import { colors, toneColor } from './theme';
+import { colors, fonts, scoreColor } from './theme';
 
 /**
- * 1–5 olives + numeric chip — spec §F5/§9.
- * Olives are drawn (not emoji) so half-fills render exactly.
+ * OliveScore — Beli-style color-graded score (1.0–5.0). Five olive glyphs tinted
+ * by the score's grade, plus the value on a graded chip. The color *is* the
+ * signal (Beli's move), so it reads at a glance.
  */
 
 function Olive({ fill, color, size }: { fill: 'full' | 'half' | 'empty'; color: string; size: number }) {
@@ -15,17 +15,18 @@ function Olive({ fill, color, size }: { fill: 'full' | 'half' | 'empty'; color: 
         styles.olive,
         {
           width: size,
-          height: size * 1.18,
+          height: size * 1.16,
           borderRadius: size,
           borderColor: color,
           backgroundColor: fill === 'full' ? color : 'transparent',
+          opacity: fill === 'empty' ? 0.28 : 1,
         },
       ]}>
       {fill === 'half' ? (
         <View
           style={{
-            width: size / 2 - 1.5,
-            height: size * 1.18 - 3,
+            width: size / 2 - 1.4,
+            height: size * 1.16 - 2.8,
             backgroundColor: color,
             borderTopLeftRadius: size,
             borderBottomLeftRadius: size,
@@ -45,28 +46,25 @@ export function HealthScoreBadge({
   size?: 'sm' | 'md' | 'lg';
   showNumber?: boolean;
 }) {
-  const color = toneColor(scoreTone(value));
-  const oliveSize = size === 'lg' ? 16 : size === 'md' ? 12 : 9;
-
-  const fills: ('full' | 'half' | 'empty')[] = [1, 2, 3, 4, 5].map((slot) => {
-    if (value >= slot) return 'full';
-    if (value >= slot - 0.5) return 'half';
-    return 'empty';
-  });
+  const color = scoreColor(value);
+  const oliveSize = size === 'lg' ? 15 : size === 'md' ? 11 : 8.5;
+  const fills: ('full' | 'half' | 'empty')[] = [1, 2, 3, 4, 5].map((slot) =>
+    value >= slot ? 'full' : value >= slot - 0.5 ? 'half' : 'empty',
+  );
 
   return (
     <View
       style={styles.row}
       accessibilityRole="image"
       accessibilityLabel={`Health score ${value} out of 5`}>
-      <View style={[styles.olives, { gap: oliveSize / 4 }]}>
-        {fills.map((fill, index) => (
-          <Olive key={index} fill={fill} color={color} size={oliveSize} />
+      <View style={[styles.olives, { gap: oliveSize / 4.5 }]}>
+        {fills.map((fill, i) => (
+          <Olive key={i} fill={fill} color={color} size={oliveSize} />
         ))}
       </View>
       {showNumber ? (
         <View style={[styles.chip, { backgroundColor: color }]}>
-          <Text style={styles.chipText}>{value.toFixed(1)}</Text>
+          <Text style={[styles.chipText, size === 'lg' && { fontSize: 15 }]}>{value.toFixed(1)}</Text>
         </View>
       ) : null}
     </View>
@@ -74,17 +72,9 @@ export function HealthScoreBadge({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   olives: { flexDirection: 'row', alignItems: 'center' },
-  olive: {
-    borderWidth: 1.5,
-    overflow: 'hidden',
-    justifyContent: 'center',
-  },
-  chip: {
-    borderRadius: 999,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  chipText: { color: colors.white, fontSize: 12, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  olive: { borderWidth: 1.5, overflow: 'hidden', justifyContent: 'center' },
+  chip: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2.5, minWidth: 30, alignItems: 'center' },
+  chipText: { color: colors.surface, fontFamily: fonts.display, fontSize: 13, letterSpacing: -0.2, fontVariant: ['tabular-nums'] },
 });

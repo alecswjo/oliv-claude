@@ -111,7 +111,7 @@ describe('Meal detail (spec §F4.4/F4.5/F2.8)', () => {
     useMealStore.getState().addMeal(ownMeal());
     await render(<MealDetailScreen />);
 
-    await fireEvent.press(screen.getByLabelText('🫒 0'));
+    await fireEvent.press(screen.getByLabelText('Give an olive'));
     expect(useMealStore.getState().meals[0].oliveUserIds).toHaveLength(1);
   });
 

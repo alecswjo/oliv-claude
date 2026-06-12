@@ -85,7 +85,7 @@ describe('My Feed (spec §F3 / §13.5)', () => {
     // Summary counts only today: 520 eaten of 2000 → 1480 remaining, 2-day streak.
     expect(screen.getByLabelText('520 of 2000 calories eaten')).toBeTruthy();
     expect(screen.getByLabelText('1480 calories remaining')).toBeTruthy();
-    expect(screen.getByText('🔥 2')).toBeTruthy();
+    expect(screen.getByLabelText('2 day streak')).toBeTruthy();
   });
 });
 
