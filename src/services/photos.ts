@@ -47,21 +47,35 @@ export async function preparePhotoForAnalysis(
   };
 }
 
-/** Copy a (cache) photo into the documents dir; returns the durable URI. */
-export function persistPhoto(tempUri: string, mealId: string): string {
-  const source = new File(tempUri);
-  const target = new File(Paths.document, `meal-${mealId}.jpg`);
-  if (target.exists) target.delete();
-  source.copySync(target);
-  return target.uri;
+/**
+ * Persist a picked photo so its URI outlives the picker/manipulator caches.
+ * Native: copy into the documents dir. Web (no file system): fall back to a
+ * base64 data URI — unlike a blob: URL it survives page reloads, which is what
+ * made saved photos go blank after refresh.
+ */
+export function persistPhoto(photo: PreparedPhoto, mealId: string, index = 0): string {
+  try {
+    const source = new File(photo.uri);
+    const target = new File(Paths.document, `meal-${mealId}-${index}.jpg`);
+    if (target.exists) target.delete();
+    source.copySync(target);
+    return target.uri;
+  } catch {
+    return photo.base64 ? `data:${photo.mediaType};base64,${photo.base64}` : photo.uri;
+  }
 }
 
-export function deletePhoto(uri: string | undefined): void {
-  if (!uri) return;
-  try {
-    const file = new File(uri);
-    if (file.exists) file.delete();
-  } catch {
-    // best-effort cleanup
+export function persistPhotos(photos: PreparedPhoto[], mealId: string): string[] {
+  return photos.map((photo, index) => persistPhoto(photo, mealId, index));
+}
+
+export function deletePhotos(uris: string[] | undefined): void {
+  for (const uri of uris ?? []) {
+    try {
+      const file = new File(uri);
+      if (file.exists) file.delete();
+    } catch {
+      // best-effort cleanup (no-op for data:/https: URIs and on web)
+    }
   }
 }

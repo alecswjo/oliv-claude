@@ -35,7 +35,9 @@ export interface CommentRow {
 export interface MealRow {
   id: string;
   user_id: string;
+  /** Legacy single-photo column (read-only back-compat). */
   photo_path: string | null;
+  photo_paths: string[];
   emoji: string | null;
   description: string;
   meal_type: MealType;
@@ -87,10 +89,11 @@ export function rowToComment(row: CommentRow): Comment {
 }
 
 export function rowToMeal(row: MealRow, photoUrl?: (path: string) => string): Meal {
+  const paths = row.photo_paths?.length ? row.photo_paths : row.photo_path ? [row.photo_path] : [];
   return {
     id: row.id,
     userId: row.user_id,
-    photoUri: row.photo_path && photoUrl ? photoUrl(row.photo_path) : undefined,
+    photoUris: paths.length && photoUrl ? paths.map(photoUrl) : undefined,
     emoji: row.emoji ?? undefined,
     description: row.description,
     mealType: row.meal_type,
@@ -119,12 +122,13 @@ export function rowToMeal(row: MealRow, photoUrl?: (path: string) => string): Me
 
 /* ----------------------------- domain → row ----------------------------- */
 
-/** Insert payload for a meal. `photo_path` is set separately after upload. */
+/** Insert payload for a meal. `photo_paths` is set separately after upload. */
 export function mealToInsert(meal: Meal): Omit<MealRow, 'olives' | 'comments'> {
   return {
     id: meal.id,
     user_id: meal.userId,
     photo_path: null,
+    photo_paths: [],
     emoji: meal.emoji ?? null,
     description: meal.description,
     meal_type: meal.mealType,

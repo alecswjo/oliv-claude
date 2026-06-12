@@ -15,7 +15,7 @@ beforeEach(async () => {
   await AsyncStorage.clear();
   jest.clearAllMocks();
   useUserStore.setState({ profile: null, hydrated: true });
-  useAppStore.setState({ units: 'metric', hydrated: true, hasApiKey: false });
+  useAppStore.setState({ units: 'metric', hydrated: true });
 });
 
 async function fillProfileStep(username = 'jake_t') {

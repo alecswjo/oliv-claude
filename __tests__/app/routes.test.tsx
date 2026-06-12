@@ -35,8 +35,9 @@ jest.mock('expo-image-picker', () => ({
 
 jest.mock('@/services/photos', () => ({
   preparePhotoForAnalysis: jest.fn(),
-  persistPhoto: jest.fn((uri: string) => uri),
-  deletePhoto: jest.fn(),
+  persistPhoto: jest.fn(),
+  persistPhotos: jest.fn(() => []),
+  deletePhotos: jest.fn(),
 }));
 
 const ANALYSIS: MealAnalysis = {
@@ -138,7 +139,7 @@ describe('Routes & navigation (integration through the real router)', () => {
 
     await fireEvent.press(screen.getByLabelText('Log a meal'));
     await waitFor(() => expect(app.getPathname()).toBe('/log'));
-    expect(await screen.findByLabelText('Analyze with AI')).toBeTruthy();
+    expect(await screen.findByLabelText('Analyze')).toBeTruthy();
 
     await fireEvent.press(screen.getByLabelText('Close'));
     await waitFor(() => expect(app.getPathname()).toBe('/'));
@@ -155,7 +156,7 @@ describe('Routes & navigation (integration through the real router)', () => {
       await screen.findByLabelText('What did you eat?'),
       'grilled chicken with brown rice and broccoli',
     );
-    await fireEvent.press(screen.getByLabelText('Analyze with AI'));
+    await fireEvent.press(screen.getByLabelText('Analyze'));
     await screen.findByText(/Offline estimate/);
     await fireEvent.press(screen.getByLabelText('Save meal'));
 
@@ -173,7 +174,7 @@ describe('Routes & navigation (integration through the real router)', () => {
       await screen.findByLabelText('What did you eat?'),
       'salmon',
     );
-    await fireEvent.press(screen.getByLabelText('Analyze with AI'));
+    await fireEvent.press(screen.getByLabelText('Analyze'));
     await screen.findByText(/Offline estimate/);
     await fireEvent.press(screen.getByLabelText('Save meal'));
 

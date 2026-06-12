@@ -17,7 +17,8 @@ jest.mock('@/services/supabase/repo', () => ({
   fetchOwnMeals: jest.fn(),
   upsertProfile: jest.fn(),
   insertMeal: jest.fn(),
-  setMealPhotoPath: jest.fn(),
+  setMealPhotoPaths: jest.fn(),
+  publicPhotoUrl: jest.fn((path: string) => `https://cdn/${path}`),
   updateMeal: jest.fn(),
   deleteMeal: jest.fn(),
   setOlive: jest.fn(),
@@ -26,7 +27,7 @@ jest.mock('@/services/supabase/repo', () => ({
 }));
 jest.mock('@/services/supabase/photos', () => ({
   uploadMealPhoto: jest.fn(),
-  deleteMealPhoto: jest.fn(),
+  deleteMealPhotos: jest.fn(),
 }));
 
 import type { Meal, UserProfile } from '@/domain/types';
@@ -143,6 +144,37 @@ describe('push queue', () => {
 
     // pushProfile, then pushNewMeal's own ensure-profile, then the insert
     expect(calls).toEqual(['profile', 'profile', 'meal']);
+  });
+
+  it('uploads local photos, records their paths, and writes public URLs back (no push)', async () => {
+    signIn();
+    useUserStore.setState({ profile: { ...localProfile, id: 'auth-1' }, hydrated: true });
+    const meal = {
+      ...mkMeal('m-photo', 'auth-1', '2026-06-12T12:00:00.000Z'),
+      photoUris: ['file:///tmp/a.jpg', 'data:image/jpeg;base64,xyz'],
+    };
+    useMealStore.setState({ meals: [meal], hydrated: true });
+    const photos = jest.requireMock('@/services/supabase/photos') as {
+      uploadMealPhoto: jest.Mock;
+    };
+    photos.uploadMealPhoto.mockImplementation(
+      async (_src: unknown, userId: string, mealId: string, index: number) =>
+        `${userId}/${mealId}-${index}.jpg`,
+    );
+
+    sync.pushNewMeal(meal);
+    await sync.flushSync();
+
+    expect(photos.uploadMealPhoto).toHaveBeenCalledTimes(2);
+    expect(mocked.setMealPhotoPaths).toHaveBeenCalledWith('m-photo', [
+      'auth-1/m-photo-0.jpg',
+      'auth-1/m-photo-1.jpg',
+    ]);
+    // permanent URLs adopted locally so reloads don't lose the images
+    expect(useMealStore.getState().meals[0].photoUris).toEqual([
+      'https://cdn/auth-1/m-photo-0.jpg',
+      'https://cdn/auth-1/m-photo-1.jpg',
+    ]);
   });
 
   it('a failed push is logged and does not block later pushes', async () => {

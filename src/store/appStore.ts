@@ -17,10 +17,8 @@ interface PersistedApp {
 
 interface AppState extends PersistedApp {
   hydrated: boolean;
-  hasApiKey: boolean;
 
   setUnits(units: Units): void;
-  setHasApiKey(value: boolean): void;
   hydrate(): Promise<void>;
 }
 
@@ -30,15 +28,10 @@ export const useAppStore = create<AppState>()((set, get) => {
   return {
     units: 'metric',
     hydrated: false,
-    hasApiKey: false,
 
     setUnits(units) {
       set({ units });
       persist();
-    },
-
-    setHasApiKey(value) {
-      set({ hasApiKey: value });
     },
 
     async hydrate() {

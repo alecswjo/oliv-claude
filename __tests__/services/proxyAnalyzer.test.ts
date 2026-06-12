@@ -30,7 +30,7 @@ const input = { description: 'salmon bowl', mealType: 'dinner' as const };
 describe('ProxyMealAnalyzer', () => {
   it('sends the auth token + payload and validates the returned analysis', async () => {
     const fetchFn = fakeFetch(200, { analysis: GOOD });
-    const result = await analyzer(fetchFn).analyze({ ...input, photoBase64: 'B64', photoMediaType: 'image/jpeg' });
+    const result = await analyzer(fetchFn).analyze({ ...input, photos: [{ base64: 'B64', mediaType: 'image/jpeg' }] });
 
     expect(result.calories).toBe(520);
     expect(result.confidence).toBe('high');
@@ -38,7 +38,7 @@ describe('ProxyMealAnalyzer', () => {
     expect(url).toContain('/functions/v1/analyze');
     expect(opts.headers.authorization).toBe('Bearer jwt-token');
     const sent = JSON.parse(opts.body);
-    expect(sent).toMatchObject({ photoBase64: 'B64', mealType: 'dinner', description: 'salmon bowl' });
+    expect(sent).toMatchObject({ photos: [{ base64: 'B64', mediaType: 'image/jpeg' }], mealType: 'dinner', description: 'salmon bowl' });
   });
 
   it('clamps out-of-range server values via validateAnalysis', async () => {
@@ -79,22 +79,19 @@ describe('ProxyMealAnalyzer', () => {
 });
 
 describe('provider backend precedence', () => {
-  it('uses the proxy when the backend is active, ignoring any local key', async () => {
+  it('uses the proxy when the backend is active', async () => {
     const proxy = { kind: 'proxy' as const, analyze: jest.fn(async () => ({ ...GOOD } as never)) };
-    const claude = { kind: 'claude' as const, analyze: jest.fn() };
     const estimator = { kind: 'estimate' as const, analyze: jest.fn() };
 
     const outcome = await runAnalysis(input, {
-      getApiKey: async () => 'sk-ant-should-be-ignored',
       useBackend: true,
       makeProxy: () => proxy,
-      makeClaude: () => claude,
       makeEstimator: () => estimator,
     });
 
     expect(outcome.analyzerUsed).toBe('proxy');
     expect(proxy.analyze).toHaveBeenCalled();
-    expect(claude.analyze).not.toHaveBeenCalled();
+    expect(estimator.analyze).not.toHaveBeenCalled();
   });
 
   it('falls back to the estimator when the proxy fails', async () => {
@@ -102,7 +99,6 @@ describe('provider backend precedence', () => {
     const estimator = { kind: 'estimate' as const, analyze: jest.fn(async () => ({ ...GOOD, confidence: 'medium' } as never)) };
 
     const outcome = await runAnalysis(input, {
-      getApiKey: async () => null,
       useBackend: true,
       makeProxy: () => proxy,
       makeEstimator: () => estimator,

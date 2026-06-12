@@ -2,9 +2,16 @@
 // app never sees it. Active provider is selected by the ANALYZE_PROVIDER env
 // var (default "openai"). Adding Gemini/Anthropic later = another case here.
 
+export interface AnalyzePhoto {
+  base64: string;
+  mediaType: string; // image/jpeg | image/png | image/webp
+}
+
+export const MAX_PHOTOS = 5;
+
 export interface AnalyzeInput {
-  photoBase64?: string;
-  photoMediaType?: string; // image/jpeg | image/png | image/webp
+  /** Up to MAX_PHOTOS photos of the same meal. */
+  photos?: AnalyzePhoto[];
   description?: string;
   mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
 }
@@ -30,6 +37,7 @@ export const SYSTEM_PROMPT =
   `You are a registered-dietitian-grade nutrition estimator for a food-tracking app.
 Estimate the nutrition of the ENTIRE pictured portion (not per 100 g, not per serving).
 Reconcile the photo with the user's description; the description wins for details the photo can't show (e.g. "light dressing", "oat milk").
+Multiple photos are different angles/parts of the SAME meal — estimate the meal once, not per photo.
 Return realistic values for typical US portions.
 - foodItems: 1-10 short names of the distinct foods, most prominent first.
 - fruitVegServings: standard produce servings (1 serving ≈ 1 cup raw leafy / 0.5 cup cooked veg / 1 medium fruit). Potatoes/fries don't count.
@@ -72,10 +80,11 @@ export class ProviderError extends Error {
 
 function userText(input: AnalyzeInput): string {
   const desc = input.description?.trim();
+  const count = input.photos?.length ?? 0;
   return (
     `Meal type: ${input.mealType}.` +
     (desc ? ` User description: "${desc}".` : ' No description provided.') +
-    (input.photoBase64 ? '' : ' No photo provided.')
+    (count === 0 ? ' No photo provided.' : count > 1 ? ` ${count} photos of the same meal.` : '')
   );
 }
 
@@ -87,11 +96,10 @@ async function analyzeWithOpenAI(input: AnalyzeInput): Promise<RawMealAnalysis> 
   const baseUrl = Deno.env.get('OPENAI_BASE_URL') ?? 'https://api.openai.com/v1';
 
   const content: unknown[] = [{ type: 'text', text: userText(input) }];
-  if (input.photoBase64) {
-    const mt = input.photoMediaType ?? 'image/jpeg';
+  for (const photo of input.photos ?? []) {
     content.push({
       type: 'image_url',
-      image_url: { url: `data:${mt};base64,${input.photoBase64}` },
+      image_url: { url: `data:${photo.mediaType};base64,${photo.base64}` },
     });
   }
 
@@ -135,7 +143,7 @@ async function analyzeWithOpenAI(input: AnalyzeInput): Promise<RawMealAnalysis> 
 }
 
 export async function analyze(input: AnalyzeInput): Promise<RawMealAnalysis> {
-  if (!input.photoBase64 && !input.description?.trim()) {
+  if (!input.photos?.length && !input.description?.trim()) {
     throw new ProviderError('Provide a photo or a description', 400);
   }
   const provider = Deno.env.get('ANALYZE_PROVIDER') ?? 'openai';

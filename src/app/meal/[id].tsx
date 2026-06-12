@@ -3,7 +3,6 @@ import { useLocalSearchParams } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { CommentList } from '@/components/CommentList';
-import { confirmDestructive } from '@/components/confirm';
 import { HealthScoreBadge } from '@/components/HealthScoreBadge';
 import { Icon } from '@/components/Icon';
 import { useSafeBack } from '@/components/navigation';
@@ -16,8 +15,10 @@ import { computeHealthScore } from '@/domain/healthScore';
 import { newId } from '@/domain/ids';
 import { mealTitle, validateAnalysis } from '@/domain/nutritionValidation';
 import type { Meal } from '@/domain/types';
-import { deletePhoto } from '@/services/photos';
+import { confirmAction } from '@/services/confirm';
+import { deletePhotos } from '@/services/photos';
 import { useMealStore } from '@/store/mealStore';
+import { showToast } from '@/store/toastStore';
 import { canDeleteComment, useSocialStore } from '@/store/socialStore';
 import { useUserStore } from '@/store/userStore';
 
@@ -99,19 +100,21 @@ export default function MealDetailScreen() {
       healthScore: computeHealthScore(next),
     });
     setEditing(false);
+    showToast('Nutrition updated');
   };
 
-  const confirmDelete = () => {
-    confirmDestructive({
+  const confirmDelete = async () => {
+    const ok = await confirmAction({
       title: 'Delete this meal?',
       message: 'This also updates your daily totals and streak.',
       confirmLabel: 'Delete',
-      onConfirm: () => {
-        deletePhoto(meal.photoUri);
-        deleteMeal(meal.id);
-        goBack();
-      },
+      destructive: true,
     });
+    if (!ok) return;
+    deletePhotos(meal.photoUris);
+    deleteMeal(meal.id);
+    showToast('Meal deleted');
+    goBack();
   };
 
   const nutritionRows: [string, string][] = [
@@ -148,8 +151,22 @@ export default function MealDetailScreen() {
           </View>
         </View>
 
-        {meal.photoUri ? (
-          <Image source={{ uri: meal.photoUri }} style={styles.photo} contentFit="cover" />
+        {meal.photoUris?.length ? (
+          meal.photoUris.length === 1 ? (
+            <Image source={{ uri: meal.photoUris[0] }} style={styles.photo} contentFit="cover" />
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing(2.5) }}>
+              {meal.photoUris.map((uri, index) => (
+                <Image
+                  key={`${uri}-${index}`}
+                  source={{ uri }}
+                  style={styles.photoMulti}
+                  contentFit="cover"
+                  accessibilityLabel={`Meal photo ${index + 1} of ${meal.photoUris?.length}`}
+                />
+              ))}
+            </ScrollView>
+          )
         ) : (
           <View style={styles.emojiTile}>
             <Text style={{ fontSize: 56 }}>{meal.emoji ?? '🍽️'}</Text>
@@ -268,6 +285,7 @@ const styles = StyleSheet.create({
   authorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(2.5) },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   photo: { width: '100%', height: 220, borderRadius: radius.lg, backgroundColor: colors.oliveSoft },
+  photoMulti: { width: 260, height: 220, borderRadius: radius.lg, backgroundColor: colors.oliveSoft },
   emojiTile: {
     width: '100%',
     height: 160,

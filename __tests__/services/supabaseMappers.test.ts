@@ -27,7 +27,8 @@ const profileRow: ProfileRow = {
 const mealRow: MealRow = {
   id: 'm1',
   user_id: 'u1',
-  photo_path: 'u1/m1.jpg',
+  photo_path: null,
+  photo_paths: ['u1/m1-0.jpg', 'u1/m1-1.jpg'],
   emoji: null,
   description: 'salmon bowl',
   meal_type: 'dinner',
@@ -62,7 +63,7 @@ describe('rowToMeal', () => {
   it('maps nutrition, score, olives, comments, and resolves the photo URL', () => {
     const meal = rowToMeal(mealRow, (path) => `https://cdn/${path}`);
     expect(meal.id).toBe('m1');
-    expect(meal.photoUri).toBe('https://cdn/u1/m1.jpg');
+    expect(meal.photoUris).toEqual(['https://cdn/u1/m1-0.jpg', 'https://cdn/u1/m1-1.jpg']);
     expect(meal.nutrition).toEqual({
       calories: 520, proteinG: 42, carbsG: 38, fatG: 21,
       fiberG: 8, sugarG: 5, sodiumMg: 380, saturatedFatG: 4,
@@ -74,10 +75,15 @@ describe('rowToMeal', () => {
     ]);
   });
 
-  it('omits photoUri when there is no photo path', () => {
-    const meal = rowToMeal({ ...mealRow, photo_path: null, emoji: '🥗' }, (p) => p);
-    expect(meal.photoUri).toBeUndefined();
+  it('omits photoUris when there is no photo path', () => {
+    const meal = rowToMeal({ ...mealRow, photo_path: null, photo_paths: [], emoji: '🥗' }, (p) => p);
+    expect(meal.photoUris).toBeUndefined();
     expect(meal.emoji).toBe('🥗');
+  });
+
+  it('falls back to the legacy single photo_path column', () => {
+    const meal = rowToMeal({ ...mealRow, photo_paths: [], photo_path: 'u1/m1.jpg' }, (p) => `https://cdn/${p}`);
+    expect(meal.photoUris).toEqual(['https://cdn/u1/m1.jpg']);
   });
 
   it('round-trips a domain meal through mealToInsert → rowToMeal', () => {

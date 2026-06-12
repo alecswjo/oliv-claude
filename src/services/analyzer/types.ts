@@ -1,15 +1,22 @@
 import type { MealAnalysis, MealType } from '@/domain/types';
 
-export interface AnalyzeInput {
+export interface AnalyzePhoto {
   /** Base64 JPEG/PNG payload (no data: prefix). */
-  photoBase64?: string;
-  photoMediaType?: 'image/jpeg' | 'image/png' | 'image/webp';
+  base64: string;
+  mediaType: 'image/jpeg' | 'image/png' | 'image/webp';
+}
+
+export const MAX_ANALYZE_PHOTOS = 5;
+
+export interface AnalyzeInput {
+  /** Up to MAX_ANALYZE_PHOTOS photos of the same meal. */
+  photos?: AnalyzePhoto[];
   description?: string;
   mealType: MealType;
 }
 
 export interface MealAnalyzer {
-  readonly kind: 'claude' | 'estimate' | 'proxy';
+  readonly kind: 'estimate' | 'proxy';
   analyze(input: AnalyzeInput): Promise<MealAnalysis>;
 }
 

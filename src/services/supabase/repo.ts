@@ -21,7 +21,7 @@ function client() {
   return supabase;
 }
 
-function publicPhotoUrl(path: string): string {
+export function publicPhotoUrl(path: string): string {
   return client().storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
@@ -69,8 +69,8 @@ export async function insertMeal(meal: Meal): Promise<void> {
   if (error) throw error;
 }
 
-export async function setMealPhotoPath(mealId: string, path: string): Promise<void> {
-  const { error } = await client().from('meals').update({ photo_path: path }).eq('id', mealId);
+export async function setMealPhotoPaths(mealId: string, paths: string[]): Promise<void> {
+  const { error } = await client().from('meals').update({ photo_paths: paths }).eq('id', mealId);
   if (error) throw error;
 }
 

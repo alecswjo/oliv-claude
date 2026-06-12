@@ -83,7 +83,7 @@ describe('EstimateMealAnalyzer.analyze', () => {
   });
 
   it('photo-only input uses the meal-type default (offline cannot see the photo)', async () => {
-    const result = await analyzer.analyze({ photoBase64: 'abc123', mealType: 'dinner' });
+    const result = await analyzer.analyze({ photos: [{ base64: 'abc123', mediaType: 'image/jpeg' }], mealType: 'dinner' });
     expect(result.calories).toBe(MEAL_TYPE_DEFAULTS.dinner.calories);
     expect(result.confidence).toBe('low');
   });

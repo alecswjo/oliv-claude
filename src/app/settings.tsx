@@ -1,14 +1,13 @@
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
-import { confirmDestructive } from '@/components/confirm';
 import { Button, Card, Chip, Field } from '@/components/ui';
 import { colors, spacing, type } from '@/components/theme';
 import { computeGoals, validateGoalOverride } from '@/domain/goals';
-import { testApiKey } from '@/services/analyzer/claudeAnalyzer';
-import { clearApiKey, getApiKey, maskKey, setApiKey } from '@/services/secureKey';
+import { confirmAction } from '@/services/confirm';
 import { resetAllStores, useAppStore } from '@/store/appStore';
 import { useAuthStore } from '@/store/authStore';
+import { showToast } from '@/store/toastStore';
 import { useUserStore } from '@/store/userStore';
 
 /** Settings — spec §F7. */
@@ -20,7 +19,6 @@ export default function SettingsScreen() {
   const setGoals = useUserStore((state) => state.setGoals);
   const units = useAppStore((state) => state.units);
   const setUnits = useAppStore((state) => state.setUnits);
-  const setHasApiKey = useAppStore((state) => state.setHasApiKey);
 
   const [displayName, setDisplayName] = useState(profile?.displayName ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
@@ -30,21 +28,13 @@ export default function SettingsScreen() {
   const [carbsG, setCarbsG] = useState(String(profile?.goals.carbsG ?? ''));
   const [fatG, setFatG] = useState(String(profile?.goals.fatG ?? ''));
   const [goalError, setGoalError] = useState<string | null>(null);
-  const [goalSaved, setGoalSaved] = useState(false);
-
-  const [storedKeyMask, setStoredKeyMask] = useState<string | null>(null);
-  const [keyDraft, setKeyDraft] = useState('');
-  const [keyStatus, setKeyStatus] = useState<string | null>(null);
-  const [testing, setTesting] = useState(false);
-
-  useEffect(() => {
-    void getApiKey().then((key) => setStoredKeyMask(key ? maskKey(key) : null));
-  }, []);
+  const [signingOut, setSigningOut] = useState(false);
 
   if (!profile) return null;
 
   const saveProfile = () => {
     updateProfile({ displayName: displayName.trim() || profile.displayName, bio: bio.trim() });
+    showToast('Profile saved');
   };
 
   const saveGoals = () => {
@@ -56,8 +46,10 @@ export default function SettingsScreen() {
     };
     const error = validateGoalOverride(goals);
     setGoalError(error);
-    setGoalSaved(!error);
-    if (!error) setGoals(goals, false);
+    if (!error) {
+      setGoals(goals, false);
+      showToast('Targets updated');
+    }
   };
 
   const recomputeFromBody = () => {
@@ -69,55 +61,37 @@ export default function SettingsScreen() {
     setFatG(String(goals.fatG));
     setGoals(goals, false);
     setGoalError(null);
-    setGoalSaved(true);
+    showToast('Targets recomputed from your body stats');
   };
 
-  const saveKey = async () => {
-    const draft = keyDraft.trim();
-    if (!draft) return;
-    await setApiKey(draft);
-    setStoredKeyMask(maskKey(draft));
-    setHasApiKey(true);
-    setKeyDraft('');
-    setKeyStatus('Key saved. Meals will now be analyzed by Claude.');
-  };
-
-  const removeKey = async () => {
-    await clearApiKey();
-    setStoredKeyMask(null);
-    setHasApiKey(false);
-    setKeyStatus('Key removed. Back to offline estimates.');
-  };
-
-  const runKeyTest = async () => {
-    const key = (await getApiKey()) ?? keyDraft.trim();
-    if (!key) {
-      setKeyStatus('Enter or save a key first.');
-      return;
+  const signOut = async () => {
+    const ok = await confirmAction({
+      title: 'Sign out?',
+      message: 'Your data stays safe on the server.',
+      confirmLabel: 'Sign out',
+    });
+    if (!ok) return;
+    setSigningOut(true);
+    try {
+      await useAuthStore.getState().signOut();
+      if (router.canGoBack()) router.dismissAll();
+      router.replace('/sign-in');
+    } finally {
+      setSigningOut(false);
     }
-    setTesting(true);
-    const result = await testApiKey(key);
-    setTesting(false);
-    setKeyStatus(
-      result === 'valid'
-        ? '✅ Key works.'
-        : result === 'auth'
-          ? '❌ Invalid key — double-check it in the Anthropic console.'
-          : "⚠️ Couldn't reach Anthropic — check your connection.",
-    );
   };
 
-  const confirmReset = () => {
-    confirmDestructive({
+  const confirmReset = async () => {
+    const ok = await confirmAction({
       title: 'Reset Oliv?',
       message: 'This clears your profile, meals, follows, and demo data.',
       confirmLabel: 'Reset everything',
-      onConfirm: () => {
-        resetAllStores();
-        if (router.canGoBack()) router.dismissAll();
-        router.replace('/onboarding');
-      },
+      destructive: true,
     });
+    if (!ok) return;
+    resetAllStores();
+    if (router.canGoBack()) router.dismissAll();
+    router.replace('/onboarding');
   };
 
   return (
@@ -151,7 +125,6 @@ export default function SettingsScreen() {
           </View>
         </View>
         {goalError ? <Text style={styles.error}>{goalError}</Text> : null}
-        {goalSaved && !goalError ? <Text style={styles.success}>Targets updated.</Text> : null}
         <View style={{ flexDirection: 'row', gap: spacing(3) }}>
           <Button title="Save targets" onPress={saveGoals} style={{ flex: 1 }} />
           {profile.body ? (
@@ -183,55 +156,13 @@ export default function SettingsScreen() {
         </View>
       </Card>
 
-      <Card style={{ gap: spacing(3) }}>
-        <Text style={type.heading}>Claude AI analysis</Text>
-        <Text style={type.small}>
-          Oliv works offline with built-in estimates. Add an Anthropic API key to get real AI photo
-          analysis. The key is kept in the iOS Keychain and only sent to Anthropic.
-        </Text>
-        {storedKeyMask ? (
-          <View style={styles.switchRow}>
-            <Text style={[type.bodyBold, type.numeric]}>{storedKeyMask}</Text>
-            <Button title="Remove" variant="danger" onPress={removeKey} style={styles.smallButton} />
-          </View>
-        ) : (
-          <>
-            <Field
-              label="API key"
-              placeholder="sk-ant-…"
-              value={keyDraft}
-              onChangeText={setKeyDraft}
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry
-            />
-            <Button title="Save key" onPress={saveKey} disabled={keyDraft.trim().length === 0} />
-          </>
-        )}
-        <Button title={testing ? 'Testing…' : 'Test key'} variant="secondary" loading={testing} onPress={runKeyTest} />
-        {keyStatus ? <Text style={type.small}>{keyStatus}</Text> : null}
-      </Card>
-
       {requiresAuth ? (
-        <Button
-          title="Sign out"
-          variant="secondary"
-          onPress={() =>
-            confirmDestructive({
-              title: 'Sign out?',
-              message: 'Your data stays safe on the server.',
-              confirmLabel: 'Sign out',
-              onConfirm: () => {
-                void useAuthStore.getState().signOut().then(() => router.replace('/sign-in'));
-              },
-            })
-          }
-        />
+        <Button title="Sign out" variant="secondary" loading={signingOut} onPress={signOut} />
       ) : null}
 
       <Button title="Reset all data" variant="danger" onPress={confirmReset} />
       <Text style={[type.tiny, { textAlign: 'center' }]}>
-        Oliv v1 · AI estimates are approximations, not medical advice
+        Oliv v1 · Nutrition estimates are approximations, not medical advice
       </Text>
     </ScrollView>
   );
@@ -244,7 +175,5 @@ const styles = StyleSheet.create({
   cell: { flexBasis: '46%', flexGrow: 1 },
   label: { ...type.smallBold, color: colors.oliveDeep },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
-  smallButton: { minHeight: 36, paddingVertical: 6 },
   error: { color: colors.danger, fontSize: 13, fontWeight: '600' },
-  success: { color: colors.olive, fontSize: 13, fontWeight: '600' },
 });
