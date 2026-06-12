@@ -10,7 +10,7 @@ import { useUserStore } from '@/store/userStore';
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: mockPush, back: jest.fn(), replace: jest.fn() }),
+  useRouter: () => ({ canGoBack: () => true, push: mockPush, back: jest.fn(), replace: jest.fn() }),
 }));
 
 import MyFeedScreen from '@/app/(tabs)/index';

@@ -1,4 +1,4 @@
-import { File, Paths } from 'expo-file-system';
+import { Directory, File, Paths } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
 /**
@@ -67,6 +67,28 @@ export function persistPhoto(photo: PreparedPhoto, mealId: string, index = 0): s
 
 export function persistPhotos(photos: PreparedPhoto[], mealId: string): string[] {
   return photos.map((photo, index) => persistPhoto(photo, mealId, index));
+}
+
+/**
+ * Delete every local photo file for a meal by filename prefix. Works even
+ * after sync swapped `photoUris` to remote URLs (which used to orphan the
+ * local copies forever).
+ */
+export function deletePhotosForMeal(mealId: string): void {
+  try {
+    const entries = new Directory(Paths.document).list();
+    for (const entry of entries) {
+      if (entry instanceof File && entry.name.startsWith(`meal-${mealId}-`)) {
+        try {
+          entry.delete();
+        } catch {
+          // best-effort
+        }
+      }
+    }
+  } catch {
+    // no file system on web — data:/https: URIs have nothing to delete
+  }
 }
 
 export function deletePhotos(uris: string[] | undefined): void {

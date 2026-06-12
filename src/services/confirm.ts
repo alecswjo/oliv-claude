@@ -15,7 +15,9 @@ export function confirmAction(opts: {
   if (Platform.OS === 'web') {
     const w = globalThis as unknown as { confirm?: (text: string) => boolean };
     const text = opts.message ? `${opts.title}\n\n${opts.message}` : opts.title;
-    return Promise.resolve(w.confirm ? w.confirm(text) : true);
+    // Fail CLOSED: a missing confirm dialog must never auto-approve a
+    // destructive action.
+    return Promise.resolve(w.confirm ? w.confirm(text) : false);
   }
   return new Promise((resolve) => {
     Alert.alert(opts.title, opts.message, [

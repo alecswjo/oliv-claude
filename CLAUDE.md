@@ -12,7 +12,8 @@ iOS social food tracker (Expo SDK 56, RN 0.85, React 19, TS strict, expo-router 
 ## Architecture rules
 - Layering: `app → components → store → services → domain`. `src/domain/` is pure TS (no React/IO) and is the only place business math lives.
 - The Health Score algorithm (`src/domain/healthScore.ts`) is **normative** — spec §6 of `docs/PRODUCT_SPEC.md`. Don't tweak tiers/deltas without updating the spec table and the reference tests in `__tests__/domain/healthScore.test.ts` together. Score deltas accumulate in integer hundredths (float-tie safety) — keep it that way.
-- All analyzer output flows through `validateAnalysis()` (clamps, macro-energy rescale, sub-nutrient caps) before scoring or saving.
+- All analyzer output flows through `validateAnalysis()` (clamps, macro-energy rescale + re-clamp, sub-nutrient caps) before scoring or saving.
+- Client ids are RFC-4122 UUIDs from `newId()` — the backend's `uuid` columns reject anything else (22P02). Sync keeps a persisted pending-op log (`sync-ops`) that replays transient failures; permanent SQLSTATE errors are dropped.
 - Stores persist via the microtask-coalesced `createPersister`; tests await `flushPersistence()`.
 - Demo/social content is seeded **once** (`seedIfNeeded`) with stable IDs and persisted; never regenerate over existing data.
 - Backend (Supabase) is **optional and gated** on `isBackendConfigured()` (the two `EXPO_PUBLIC_SUPABASE_*` env vars). When unset, the app is fully local/offline and the Supabase SDK must never load. Keep all Supabase access behind `src/services/sync.ts` (push helpers + `backendActive()`), which dynamic-imports `src/services/supabase/*`. Don't statically import the Supabase client from anything in the test/offline graph (analyzers, stores) — `proxyAnalyzer` and `sync` lazy-load it on purpose.

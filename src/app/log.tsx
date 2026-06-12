@@ -11,6 +11,7 @@ import { colors, MEAL_TYPE_EMOJI, MEAL_TYPE_LABELS, radius, spacing, type } from
 import { mealTypeForHour } from '@/domain/dates';
 import { computeHealthScore } from '@/domain/healthScore';
 import { newId } from '@/domain/ids';
+import { parseNumericInput as num } from '@/domain/numbers';
 import { validateAnalysis } from '@/domain/nutritionValidation';
 import type { Confidence, Meal, MealAnalysis, MealType, ProcessingLevel } from '@/domain/types';
 import { runAnalysis, type AnalysisOutcome } from '@/services/analyzer/provider';
@@ -50,10 +51,7 @@ function fieldsFromAnalysis(analysis: MealAnalysis): EditableFields {
   };
 }
 
-function num(value: string): number {
-  const parsed = Number(value.replace(',', '.'));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
+
 
 const EMPTY_MANUAL: MealAnalysis = validateAnalysis({
   calories: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0, sugarG: 0,
@@ -121,37 +119,55 @@ export default function LogMealScreen() {
   };
 
   const addAssets = async (assets: ImagePicker.ImagePickerAsset[]) => {
-    const prepared = await Promise.all(
+    // Per-asset isolation: one corrupt image must not kill the whole batch —
+    // and a silent unhandled rejection looked like a dead button.
+    const results = await Promise.allSettled(
       assets
         .slice(0, photoSlotsLeft)
         .map((asset) => preparePhotoForAnalysis(asset.uri, asset.width, asset.height)),
     );
-    setPhotos((current) => [...current, ...prepared].slice(0, MAX_ANALYZE_PHOTOS));
+    const prepared = results
+      .filter((r): r is PromiseFulfilledResult<PreparedPhoto> => r.status === 'fulfilled')
+      .map((r) => r.value);
+    if (prepared.length < results.length) {
+      setInputError("Couldn't load one of those photos — try a different one.");
+    }
+    if (prepared.length > 0) {
+      setPhotos((current) => [...current, ...prepared].slice(0, MAX_ANALYZE_PHOTOS));
+    }
   };
 
   const pickFromLibrary = async () => {
     if (photoSlotsLeft === 0) return;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.9,
-      allowsMultipleSelection: true,
-      selectionLimit: photoSlotsLeft,
-    });
-    if (result.canceled || !result.assets?.length) return;
-    await addAssets(result.assets);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.9,
+        allowsMultipleSelection: true,
+        selectionLimit: photoSlotsLeft,
+      });
+      if (result.canceled || !result.assets?.length) return;
+      await addAssets(result.assets);
+    } catch {
+      setInputError("Couldn't open your photo library.");
+    }
   };
 
   const pickFromCamera = async () => {
     if (photoSlotsLeft === 0) return;
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      setCameraDenied(true); // spec F2.9 — library & description paths stay open
-      return;
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        setCameraDenied(true); // spec F2.9 — library & description paths stay open
+        return;
+      }
+      setCameraDenied(false);
+      const result = await ImagePicker.launchCameraAsync({ quality: 0.9 });
+      if (result.canceled || !result.assets?.length) return;
+      await addAssets(result.assets);
+    } catch {
+      setInputError("Couldn't open the camera.");
     }
-    setCameraDenied(false);
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.9 });
-    if (result.canceled || !result.assets?.length) return;
-    await addAssets(result.assets);
   };
 
   const removePhoto = (index: number) => {
@@ -233,7 +249,8 @@ export default function LogMealScreen() {
     };
 
     addMeal(meal);
-    router.back();
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)');
   };
 
   const markEdited = () => setEdited(true);
@@ -347,7 +364,9 @@ export default function LogMealScreen() {
               <Text style={type.small}>
                 Camera access is off. You can still pick from your library or just describe the meal.
               </Text>
-              <Button title="Open Settings" variant="ghost" onPress={() => Linking.openSettings()} />
+              {Platform.OS !== 'web' ? (
+                <Button title="Open Settings" variant="ghost" onPress={() => Linking.openSettings()} />
+              ) : null}
             </Card>
           ) : null}
         </View>

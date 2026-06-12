@@ -90,3 +90,26 @@ describe('mealTitle', () => {
     expect(title.endsWith('…')).toBe(true);
   });
 });
+
+describe('validateAnalysis hardening (production review)', () => {
+  it('re-clamps macros after the energy rescale', () => {
+    // 5000 kcal with one tiny macro used to rescale protein to 1250 g
+    const result = validateAnalysis({
+      calories: 5000, proteinG: 100, carbsG: 0, fatG: 0,
+      fiberG: 0, sugarG: 0, sodiumMg: 0, saturatedFatG: 0,
+      fruitVegServings: 0, processingLevel: 2, confidence: 'high', foodItems: ['x'],
+    });
+    expect(result.proteinG).toBeLessThanOrEqual(400);
+    expect(result.carbsG).toBeLessThanOrEqual(800);
+    expect(result.fatG).toBeLessThanOrEqual(400);
+  });
+
+  it('defaults a missing processingLevel to 2, not the level-1 score bonus', () => {
+    const result = validateAnalysis({
+      calories: 500, proteinG: 20, carbsG: 60, fatG: 15,
+      fiberG: 3, sugarG: 5, sodiumMg: 300, saturatedFatG: 3,
+      fruitVegServings: 1, confidence: 'high', foodItems: ['x'],
+    });
+    expect(result.processingLevel).toBe(2);
+  });
+});

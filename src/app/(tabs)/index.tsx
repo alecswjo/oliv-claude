@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
-import React, { useMemo } from 'react';
-import { SectionList, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native';
 import { DailySummaryCard } from '@/components/DailySummaryCard';
 import { MealCard } from '@/components/MealCard';
 import { Button, EmptyState } from '@/components/ui';
@@ -16,6 +16,7 @@ import { useUserStore } from '@/store/userStore';
 
 /** My Feed — the main page (spec §F3). */
 export default function MyFeedScreen() {
+  const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
   const profile = useUserStore((state) => state.profile);
   const meals = useMealStore((state) => state.meals);
@@ -49,6 +50,24 @@ export default function MyFeedScreen() {
 
   return (
     <SectionList<Meal>
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          tintColor={colors.olive}
+          onRefresh={async () => {
+            const { backendActive, currentUserId, hydrateForUser } = await import('@/services/sync');
+            if (!backendActive()) return;
+            setRefreshing(true);
+            try {
+              await hydrateForUser(currentUserId()!);
+            } catch {
+              // pull again later
+            } finally {
+              setRefreshing(false);
+            }
+          }}
+        />
+      }
       sections={sections}
       keyExtractor={(meal) => meal.id}
       style={styles.list}

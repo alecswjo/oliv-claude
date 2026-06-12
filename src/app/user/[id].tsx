@@ -9,6 +9,7 @@ import { colors, fonts, scoreColor, spacing, type } from '@/components/theme';
 import { dayKeyFromIso } from '@/domain/dates';
 import { computeStreak } from '@/domain/streaks';
 import { averageScore } from '@/domain/summaries';
+import { blockUser, reportContent, unblockUser } from '@/services/safety';
 import { followCountsFor, useSocialStore } from '@/store/socialStore';
 import { useUserStore } from '@/store/userStore';
 
@@ -25,27 +26,31 @@ export default function UserProfileScreen() {
   const follow = useSocialStore((state) => state.follow);
   const unfollow = useSocialStore((state) => state.unfollow);
   const toggleOlive = useSocialStore((state) => state.toggleOlive);
+  const blockedIds = useSocialStore((state) => state.blockedIds);
 
   const user = demoUsers.find((candidate) => candidate.id === id);
 
   const theirMeals = useMemo(
     () =>
-      demoMeals
-        .filter((meal) => meal.userId === id && !meal.isPrivate)
-        .sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime()),
-    [demoMeals, id],
+      blockedIds.includes(id ?? '')
+        ? []
+        : demoMeals
+            .filter((meal) => meal.userId === id && !meal.isPrivate)
+            .sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime()),
+    [demoMeals, id, blockedIds],
   );
 
   if (!user || !profile) {
     return (
       <View style={styles.missing}>
         <Text style={type.heading}>User not found</Text>
-        <Button title="Go back" variant="secondary" onPress={() => router.back()} />
+        <Button title="Go back" variant="secondary" onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} />
       </View>
     );
   }
 
   const following = followingIds.includes(user.id);
+  const blocked = blockedIds.includes(user.id);
   const counts = followCountsFor(user, { followingIds, followerIds });
   const streak = computeStreak(theirMeals.map((meal) => dayKeyFromIso(meal.loggedAt)), new Date());
   const avgScore = averageScore(theirMeals);
@@ -96,13 +101,41 @@ export default function UserProfileScreen() {
               </View>
             </View>
 
-            <Button
-              title={following ? 'Following' : 'Follow'}
-              variant={following ? 'secondary' : 'primary'}
-              icon={following ? 'check' : 'user-plus'}
-              onPress={() => (following ? unfollow(user.id) : follow(user.id))}
-              style={{ alignSelf: 'stretch' }}
-            />
+            {blocked ? (
+              <Button
+                title="Unblock"
+                variant="secondary"
+                icon="rotate-ccw"
+                onPress={() => unblockUser(user.id, user.displayName)}
+                style={{ alignSelf: 'stretch' }}
+              />
+            ) : (
+              <Button
+                title={following ? 'Following' : 'Follow'}
+                variant={following ? 'secondary' : 'primary'}
+                icon={following ? 'check' : 'user-plus'}
+                onPress={() => (following ? unfollow(user.id) : follow(user.id))}
+                style={{ alignSelf: 'stretch' }}
+              />
+            )}
+            <View style={styles.safetyRow}>
+              <Button
+                title="Report"
+                variant="ghost"
+                icon="flag"
+                onPress={() => reportContent('user', user.id)}
+                style={{ flex: 1 }}
+              />
+              {!blocked ? (
+                <Button
+                  title="Block"
+                  variant="ghost"
+                  icon="slash"
+                  onPress={() => blockUser(user.id, user.displayName)}
+                  style={{ flex: 1 }}
+                />
+              ) : null}
+            </View>
           </Card>
         }
         renderItem={({ item }) => (
@@ -144,4 +177,5 @@ const styles = StyleSheet.create({
   statDivider: { width: StyleSheet.hairlineWidth, height: 24, backgroundColor: colors.line },
   statValue: { fontFamily: fonts.display, fontSize: 19, color: colors.oliveDeep, letterSpacing: -0.4, fontVariant: ['tabular-nums'] },
   streakValue: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  safetyRow: { flexDirection: 'row', gap: spacing(2) },
 });

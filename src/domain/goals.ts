@@ -17,6 +17,10 @@ export const GOAL_ADJUSTMENTS: Record<BodyGoal, number> = {
 };
 
 export const CALORIE_FLOOR = 1200;
+/** Matches validateGoalOverride's ceiling — the engine must never compute a
+ *  target its own validator rejects (it dead-ended onboarding for very heavy,
+ *  very active users whose TDEE exceeded the override cap). */
+export const CALORIE_CEILING = 6000;
 
 /** Mifflin-St Jeor: 10*kg + 6.25*cm − 5*age + s. Unspecified sex uses the midpoint constant. */
 export function bmr(body: Pick<BodyProfile, 'sex' | 'age' | 'heightCm' | 'weightKg'>): number {
@@ -27,7 +31,7 @@ export function bmr(body: Pick<BodyProfile, 'sex' | 'age' | 'heightCm' | 'weight
 export function dailyCalorieTarget(body: BodyProfile): number {
   const tdee = bmr(body) * ACTIVITY_MULTIPLIERS[body.activity];
   const adjusted = tdee + GOAL_ADJUSTMENTS[body.goal];
-  return Math.max(CALORIE_FLOOR, Math.round(adjusted));
+  return Math.min(CALORIE_CEILING, Math.max(CALORIE_FLOOR, Math.round(adjusted)));
 }
 
 /**

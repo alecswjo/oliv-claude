@@ -28,6 +28,40 @@ export async function signInEmail(email: string, password: string): Promise<void
 }
 
 /**
+ * Native Sign in with Apple (iOS): the system sheet returns an identity token
+ * we exchange directly — no browser round-trip. Required by App Store
+ * Guideline 4.8 alongside any third-party login. Falls back to the web OAuth
+ * flow off-iOS.
+ */
+export async function signInWithApple(): Promise<void> {
+  if (Platform.OS !== 'ios') {
+    return signInWithProvider('apple');
+  }
+  const supabase = requireClient();
+  const Apple = await import('expo-apple-authentication');
+  let credential: import('expo-apple-authentication').AppleAuthenticationCredential;
+  try {
+    credential = await Apple.signInAsync({
+      requestedScopes: [
+        Apple.AppleAuthenticationScope.FULL_NAME,
+        Apple.AppleAuthenticationScope.EMAIL,
+      ],
+    });
+  } catch (err) {
+    if ((err as { code?: string }).code === 'ERR_REQUEST_CANCELED') {
+      throw new Error('Sign-in was cancelled.');
+    }
+    throw err;
+  }
+  if (!credential.identityToken) throw new Error('Apple returned no identity token.');
+  const { error } = await supabase.auth.signInWithIdToken({
+    provider: 'apple',
+    token: credential.identityToken,
+  });
+  if (error) throw error;
+}
+
+/**
  * OAuth sign-in (PKCE). On web this is a full-page redirect — the promise
  * resolves as the page navigates away, and the redirected-back page picks up
  * the session via `detectSessionInUrl`. On native we open the provider in an
@@ -63,6 +97,27 @@ export async function signInWithProvider(provider: OAuthProvider): Promise<void>
   }
   const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
   if (exchangeError) throw exchangeError;
+}
+
+/**
+ * Permanently delete the signed-in account (server function purges photos and
+ * the auth user; rows cascade). Resolves on success; throws otherwise.
+ */
+export async function deleteAccount(): Promise<void> {
+  const supabase = requireClient();
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error('Not signed in.');
+  const { deleteAccountUrl } = await import('@/config');
+  const response = await fetch(deleteAccountUrl(), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    body: '{}',
+  });
+  if (!response.ok) {
+    throw new Error('Account deletion failed — please contact support.');
+  }
+  await supabase.auth.signOut().catch(() => {}); // session is already invalid
 }
 
 export async function signOut(): Promise<void> {

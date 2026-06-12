@@ -15,8 +15,10 @@ export function ToastHost() {
     if (!message) return;
     Animated.timing(opacity, { toValue: 1, duration: 160, useNativeDriver: true }).start();
     const timer = setTimeout(() => {
-      Animated.timing(opacity, { toValue: 0, duration: 220, useNativeDriver: true }).start(() =>
-        useToastStore.getState().clear(),
+      Animated.timing(opacity, { toValue: 0, duration: 220, useNativeDriver: true }).start(
+        ({ finished }) => {
+          if (finished) useToastStore.getState().clear();
+        },
       );
     }, VISIBLE_MS);
     return () => clearTimeout(timer);

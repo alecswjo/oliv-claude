@@ -33,16 +33,30 @@ function chunk(type, data) {
   return Buffer.concat([len, body, crc]);
 }
 
-function encodePng(width, height, rgba) {
+function encodePng(width, height, rgba, { opaque = false } = {}) {
+  // App Store icon validation (ITMS-90717) rejects icons with an alpha
+  // channel, so the iOS icon is written as opaque RGB (color type 2).
+  const channels = opaque ? 3 : 4;
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
   ihdr[8] = 8; // bit depth
-  ihdr[9] = 6; // color type RGBA
-  const raw = Buffer.alloc((width * 4 + 1) * height);
+  ihdr[9] = opaque ? 2 : 6; // color type RGB / RGBA
+  const raw = Buffer.alloc((width * channels + 1) * height);
   for (let y = 0; y < height; y++) {
-    raw[y * (width * 4 + 1)] = 0; // filter: none
-    rgba.copy(raw, y * (width * 4 + 1) + 1, y * width * 4, (y + 1) * width * 4);
+    const rowStart = y * (width * channels + 1);
+    raw[rowStart] = 0; // filter: none
+    if (opaque) {
+      for (let x = 0; x < width; x++) {
+        const src = (y * width + x) * 4;
+        const dst = rowStart + 1 + x * 3;
+        raw[dst] = rgba[src];
+        raw[dst + 1] = rgba[src + 1];
+        raw[dst + 2] = rgba[src + 2];
+      }
+    } else {
+      rgba.copy(raw, rowStart + 1, y * width * 4, (y + 1) * width * 4);
+    }
   }
   return Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
@@ -80,7 +94,7 @@ function rotate(x, y, cx, cy, angle) {
   return [cx + dx * cos + dy * sin, cy - dx * sin + dy * cos];
 }
 
-function drawIcon(size, { transparent = false } = {}) {
+function drawIcon(size, { transparent = false, opaque = false } = {}) {
   const rgba = Buffer.alloc(size * size * 4);
   const cx = size / 2;
   const cy = size / 2;
@@ -128,11 +142,11 @@ function drawIcon(size, { transparent = false } = {}) {
       }
     }
   }
-  return encodePng(size, size, rgba);
+  return encodePng(size, size, rgba, { opaque });
 }
 
 const out = (name) => path.join(__dirname, '..', 'assets', 'images', name);
-fs.writeFileSync(out('icon.png'), drawIcon(1024));
+fs.writeFileSync(out('icon.png'), drawIcon(1024, { opaque: true }));
 fs.writeFileSync(out('splash-icon.png'), drawIcon(512, { transparent: true }));
 fs.writeFileSync(out('favicon.png'), drawIcon(48));
 fs.writeFileSync(out('android-icon-foreground.png'), drawIcon(432, { transparent: true }));

@@ -6,7 +6,7 @@ import { useUserStore } from '@/store/userStore';
 
 const mockReplace = jest.fn();
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: jest.fn(), back: jest.fn(), replace: mockReplace }),
+  useRouter: () => ({ canGoBack: () => true, push: jest.fn(), back: jest.fn(), replace: mockReplace }),
 }));
 
 import OnboardingScreen from '@/app/onboarding';

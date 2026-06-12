@@ -6,9 +6,15 @@ the server**.
 
 ```
 supabase/
-  migrations/0001_schema.sql    tables, enums, indexes, RLS policies, profile_stats view
-  migrations/0002_storage.sql   `meal-photos` bucket + owner-scoped storage policies
-  functions/analyze/            POST proxy → OpenAI gpt-5.5 (provider-pluggable)
+  migrations/0001_schema.sql      tables, enums, indexes, RLS policies
+  migrations/0002_storage.sql     `meal-photos` bucket + owner-scoped storage policies
+  migrations/0003_photo_paths.sql multi-photo meals (photo_paths text[])
+  migrations/0004_privacy_safety.sql owner-only profiles + public_profiles view,
+                                  security-invoker profile_stats, reports/blocks,
+                                  analyze_usage, bucket size/MIME limits
+  migrations/0005_analyze_quota.sql bump_analyze_usage() (service-role only)
+  functions/analyze/              POST proxy → OpenAI gpt-5.5 (quota + caps + timeout)
+  functions/delete-account/       POST — purges storage + deletes the auth user
 ```
 
 ## One-time setup
@@ -66,6 +72,7 @@ For native deep-link redirects, add the app scheme to dashboard →
 supabase secrets set OPENAI_API_KEY=sk-...        # required — never goes in the app
 supabase secrets set OPENAI_MODEL=gpt-5.5         # optional (default gpt-5.5)
 supabase functions deploy analyze
+supabase functions deploy delete-account
 ```
 
 The function authenticates the caller via their Supabase JWT, calls OpenAI with

@@ -10,6 +10,7 @@ import { useMealStore } from '@/store/mealStore';
 import { useUserStore } from '@/store/userStore';
 
 const CHART_HEIGHT = 120;
+const BAR_BASELINE_OFFSET = 18; // barDay lineHeight 13 + column gap 5
 
 /** Progress tab — spec §F6. */
 export default function ProgressScreen() {
@@ -58,7 +59,9 @@ export default function ProgressScreen() {
           {/* target line */}
           <View
             accessibilityLabel={`Daily target ${target} calories`}
-            style={[styles.targetLine, { bottom: (target / maxBar) * CHART_HEIGHT }]}
+            // The bars' zero baseline sits above the day label + column gap;
+            // without this offset the line reads ~18px lower than the truth.
+            style={[styles.targetLine, { bottom: BAR_BASELINE_OFFSET + (target / maxBar) * CHART_HEIGHT }]}
           />
           <View style={styles.barsRow}>
             {week.map((day) => {
@@ -142,7 +145,7 @@ const styles = StyleSheet.create({
   barColumn: { flex: 1, alignItems: 'center', gap: 5 },
   bar: { width: '100%', borderRadius: radius.sm },
   barValue: { fontFamily: fonts.display, fontSize: 10, color: colors.ink50, fontVariant: ['tabular-nums'] },
-  barDay: { fontFamily: fonts.sansMed, fontSize: 11, color: colors.ink30 },
+  barDay: { fontFamily: fonts.sansMed, fontSize: 11, lineHeight: 13, color: colors.ink30 },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(3) },
   statCard: { flexBasis: '47%', flexGrow: 1, alignItems: 'center', gap: spacing(1) },
   statValue: { fontFamily: fonts.display, fontSize: 26, color: colors.oliveDeep, letterSpacing: -0.5, fontVariant: ['tabular-nums'] },

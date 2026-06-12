@@ -41,9 +41,11 @@ export function validateAnalysis(raw: Partial<MealAnalysis>): MealAnalysis {
     }
   }
 
-  proteinG = round1(proteinG);
-  carbsG = round1(carbsG);
-  fatG = round1(fatG);
+  // Re-clamp AFTER the rescale: scaling up (e.g. 5000 kcal with one tiny
+  // macro) must not blow past the documented ceilings.
+  proteinG = round1(Math.min(proteinG, 400));
+  carbsG = round1(Math.min(carbsG, 800));
+  fatG = round1(Math.min(fatG, 400));
 
   // Sub-nutrients can never exceed their parent macro.
   const fiberG = round1(Math.min(clampNumber(raw.fiberG, 0, 150), carbsG));
@@ -53,8 +55,14 @@ export function validateAnalysis(raw: Partial<MealAnalysis>): MealAnalysis {
 
   const fruitVegServings = round1(clampNumber(raw.fruitVegServings, 0, 10));
 
-  const levelNum = Math.round(clampNumber(raw.processingLevel, 1, 4));
-  const processingLevel = (levelNum < 1 ? 1 : levelNum > 4 ? 4 : levelNum) as ProcessingLevel;
+  // Missing/invalid processing data must NOT default to level 1 (the highest
+  // score bonus) — 2 is the neutral manual-entry default (spec F2.7).
+  const rawLevel =
+    typeof raw.processingLevel === 'number' && Number.isFinite(raw.processingLevel)
+      ? raw.processingLevel
+      : 2;
+  const levelNum = Math.round(Math.min(4, Math.max(1, rawLevel)));
+  const processingLevel = levelNum as ProcessingLevel;
 
   const confidence: Confidence = CONFIDENCES.includes(raw.confidence as Confidence)
     ? (raw.confidence as Confidence)

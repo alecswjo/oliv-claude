@@ -7,8 +7,8 @@
 | | |
 |---|---|
 | **Platform** | iOS (Expo SDK 56 / React Native 0.85 / TypeScript strict) |
-| **AI** | Claude (`claude-opus-4-8`) vision + structured outputs, with a deterministic offline estimator as demo mode & fallback |
-| **State** | Zustand + AsyncStorage (local-first), SecureStore for the API key |
+| **AI** | Server-side proxy (Supabase Edge Function → OpenAI gpt-5.5, key never ships in the app), with a deterministic offline estimator as demo mode & fallback |
+| **State** | Zustand + AsyncStorage (local-first), Keychain (SecureStore) for auth sessions |
 | **Tests** | 258 Jest tests — domain, services, stores, components, and screen flows |
 
 ---
@@ -22,12 +22,9 @@
 - **Progress.** Streaks (current & longest), 7-day calorie chart vs target, 7-day average score.
 - **Goal engine.** Mifflin-St Jeor BMR × activity ± goal → calorie target; protein 1.6 g/kg (clamped 20–35% of calories), fat 27.5%, carbs the remainder. Manual override with validation.
 
-## Demo mode vs Claude mode
+## Offline mode vs backend mode
 
-Oliv is fully usable **offline with no API key**: a deterministic keyword estimator (~60-food lexicon, quantity modifiers, meal-type fallbacks) powers analysis. Add an Anthropic API key in **Settings → Claude AI analysis** and meal photos are analyzed by `claude-opus-4-8` with a strict JSON schema (`output_config.format`); any Claude failure falls back to the estimator with a notice.
-
-> ⚠️ **Demo architecture:** the app calls Anthropic directly with a user-supplied key (kept in the iOS Keychain). A production/App Store release must proxy through a backend that owns the key — `MealAnalyzer` in `src/services/analyzer/` is the seam where that swaps in. See spec §7.2.
-
+Oliv is fully usable **offline with no backend**: a deterministic keyword estimator (~60-food lexicon, quantity modifiers, meal-type fallbacks) powers analysis. Configure the two `EXPO_PUBLIC_SUPABASE_*` env vars (see `.env.example`) and the app gains accounts (email, Google, Apple), cross-device sync, and real photo analysis through the server-side proxy (`supabase/functions/analyze`) — the LLM key never ships in the app. Any proxy failure falls back to the estimator with a notice.
 ## Running it
 
 ```bash
@@ -62,7 +59,7 @@ docs/                 PRODUCT_SPEC.md · SPEC_REVIEW.md · IMPLEMENTATION_PLAN.m
 supabase/             migrations (schema + RLS + storage) · functions/analyze (server-key proxy)
 src/
   domain/             pure logic: health score, goals, validation, streaks, summaries, dates
-  services/           analyzer (proxy + claude + estimator), supabase (data layer), sync, seeds, storage
+  services/           analyzer (proxy + estimator), supabase (data layer), sync, safety, seeds, storage
   store/              zustand stores: user, meals, social, app, auth (+ pure selectors)
   components/         theme + UI kit + feature components
   app/                expo-router routes (tabs, log, meal/user detail, settings, onboarding, sign-in)

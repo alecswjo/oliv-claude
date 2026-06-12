@@ -1,8 +1,9 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { Button, Card, Chip, Field } from '@/components/ui';
 import { colors, spacing, type } from '@/components/theme';
+import { SUPPORT_EMAIL } from '@/config';
 import { computeGoals, validateGoalOverride } from '@/domain/goals';
 import { confirmAction } from '@/services/confirm';
 import { resetAllStores, useAppStore } from '@/store/appStore';
@@ -29,6 +30,7 @@ export default function SettingsScreen() {
   const [fatG, setFatG] = useState(String(profile?.goals.fatG ?? ''));
   const [goalError, setGoalError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   if (!profile) return null;
 
@@ -78,6 +80,31 @@ export default function SettingsScreen() {
       router.replace('/sign-in');
     } finally {
       setSigningOut(false);
+    }
+  };
+
+  const deleteAccount = async () => {
+    const ok = await confirmAction({
+      title: 'Delete your account?',
+      message:
+        'This permanently removes your account, profile, meals, photos, and comments from our servers. It cannot be undone.',
+      confirmLabel: 'Delete forever',
+      destructive: true,
+    });
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      const auth = await import('@/services/supabase/auth');
+      await auth.deleteAccount();
+      resetAllStores();
+      useAuthStore.getState().setUser(null);
+      showToast('Account deleted');
+      router.dismissAll();
+      router.replace('/sign-in');
+    } catch (err) {
+      showToast((err as Error).message ?? 'Deletion failed — contact support.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -160,11 +187,26 @@ export default function SettingsScreen() {
         </View>
       </Card>
 
+      <Card style={{ gap: spacing(1) }}>
+        <Text style={type.heading}>About</Text>
+        <Button title="Privacy Policy" variant="ghost" onPress={() => router.push('/legal/privacy')} />
+        <Button title="Terms of Use" variant="ghost" onPress={() => router.push('/legal/terms')} />
+        <Button
+          title="Contact us"
+          variant="ghost"
+          onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`).catch(() => {})}
+        />
+      </Card>
+
       {requiresAuth ? (
         <Button title="Sign out" variant="secondary" loading={signingOut} onPress={signOut} />
       ) : null}
 
-      <Button title="Reset all data" variant="danger" onPress={confirmReset} />
+      {requiresAuth ? (
+        <Button title="Delete account" variant="danger" loading={deleting} onPress={deleteAccount} />
+      ) : (
+        <Button title="Reset all data" variant="danger" onPress={confirmReset} />
+      )}
       <Text style={[type.tiny, { textAlign: 'center' }]}>
         Oliv v1 · Nutrition estimates are approximations, not medical advice
       </Text>

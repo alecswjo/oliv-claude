@@ -133,3 +133,14 @@ describe('unit conversions', () => {
     expect(feetInchesToCm(5, 10)).toBeCloseTo(177.8, 1);
   });
 });
+
+describe('goal engine ceiling (production review)', () => {
+  it('never computes a target its own validator rejects', () => {
+    const goals = computeGoals({
+      sex: 'male', age: 20, heightCm: 250, weightKg: 300,
+      activity: 'veryActive', goal: 'gain',
+    });
+    expect(goals.dailyCalories).toBeLessThanOrEqual(6000);
+    expect(validateGoalOverride(goals)).toBeNull();
+  });
+});

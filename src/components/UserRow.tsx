@@ -1,5 +1,6 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
+import { isBackendConfigured } from '@/config';
 import type { UserProfile } from '@/domain/types';
 import { Flame } from './Icon';
 import { Button, PressableScale } from './ui';
@@ -22,6 +23,7 @@ export function UserRow({
 }) {
   return (
     <PressableScale
+      accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
       accessibilityLabel={`${user.displayName}, @${user.username}`}
       onPress={onPress}
       style={styles.row}>
@@ -29,6 +31,9 @@ export function UserRow({
       <View style={{ flex: 1, gap: 3 }}>
         <Text style={type.bodyBold} numberOfLines={1}>
           {user.displayName}
+          {user.isDemo && isBackendConfigured() ? (
+            <Text style={{ color: colors.ink30 }}>  · Demo</Text>
+          ) : null}
         </Text>
         <Text style={type.tiny} numberOfLines={1}>
           @{user.username}

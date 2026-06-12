@@ -10,7 +10,7 @@ import { useUserStore } from '@/store/userStore';
 
 let mockMealId = 'own1';
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: jest.fn(), back: jest.fn(), replace: jest.fn() }),
+  useRouter: () => ({ canGoBack: () => true, push: jest.fn(), back: jest.fn(), replace: jest.fn() }),
   useLocalSearchParams: () => ({ id: mockMealId }),
   Stack: { Screen: () => null },
 }));

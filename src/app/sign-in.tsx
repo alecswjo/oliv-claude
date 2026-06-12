@@ -77,13 +77,18 @@ export default function SignInScreen() {
     setBusy(provider);
     try {
       const auth = await import('@/services/supabase/auth');
-      await auth.signInWithProvider(provider);
-      if (Platform.OS === 'web') return; // full-page redirect is taking over
+      if (provider === 'apple') {
+        // Native sheet on iOS (Guideline 4.8); browser OAuth elsewhere.
+        await auth.signInWithApple();
+      } else {
+        await auth.signInWithProvider(provider);
+        if (Platform.OS === 'web') return; // full-page redirect is taking over
+      }
       await finishSignIn();
     } catch (err) {
       setError((err as Error).message ?? 'Something went wrong.');
     } finally {
-      if (Platform.OS !== 'web') setBusy(null);
+      if (Platform.OS !== 'web' || provider === 'apple') setBusy(null);
     }
   };
 
@@ -106,8 +111,12 @@ export default function SignInScreen() {
         </View>
 
         <Card style={{ gap: spacing(3) }}>
-          {/* Apple is hidden until the provider is configured (signInWithProvider
-              already supports it — add a button with provider "apple" to re-enable). */}
+          <Button
+            title="Continue with Apple"
+            variant="secondary"
+            loading={busy === 'apple'}
+            onPress={() => submitOAuth('apple')}
+          />
           <Button
             title="Continue with Google"
             variant="secondary"
@@ -156,6 +165,17 @@ export default function SignInScreen() {
               setNotice(null);
             }}
           />
+          <Text style={styles.legal}>
+            By continuing you agree to our{' '}
+            <Text style={styles.legalLink} onPress={() => router.push('/legal/terms')}>
+              Terms of Use
+            </Text>{' '}
+            and{' '}
+            <Text style={styles.legalLink} onPress={() => router.push('/legal/privacy')}>
+              Privacy Policy
+            </Text>
+            .
+          </Text>
         </Card>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -169,5 +189,7 @@ const styles = StyleSheet.create({
   brand: { fontSize: 40, fontWeight: '900', color: colors.oliveDeep, letterSpacing: -1 },
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
   error: { color: colors.danger, fontSize: 13, fontWeight: '600' },
+  legal: { ...type.tiny, textAlign: 'center' as const, lineHeight: 16 },
+  legalLink: { color: colors.olive, textDecorationLine: 'underline' as const },
   notice: { color: colors.olive, fontSize: 13, fontWeight: '600' },
 });

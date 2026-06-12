@@ -7,7 +7,7 @@ import { useUserStore } from '@/store/userStore';
 
 const mockBack = jest.fn();
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: jest.fn(), back: mockBack, replace: jest.fn() }),
+  useRouter: () => ({ canGoBack: () => true, push: jest.fn(), back: mockBack, replace: jest.fn() }),
 }));
 
 jest.mock('expo-image-picker', () => ({

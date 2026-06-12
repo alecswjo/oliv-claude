@@ -27,7 +27,7 @@ is exactly the original offline build.
 - Provider-pluggable: add Gemini/Anthropic in `providers.ts` and flip
   `ANALYZE_PROVIDER`. Model is `OPENAI_MODEL` (default `gpt-5.5`).
 - Client: `ProxyMealAnalyzer` (`src/services/analyzer/proxyAnalyzer.ts`) is the
-  top analyzer in the precedence `proxy → local Claude key → offline estimator`.
+  top analyzer in the precedence `proxy → offline estimator`.
   Any AI failure still falls back to the deterministic estimator.
 
 ## What's built in this milestone
@@ -42,36 +42,35 @@ is exactly the original offline build.
   sign-in, hydrates profile + meals on launch.
 - **Write-through sync**: own meals, profile, olives/comments, photo upload mirror
   to Supabase when signed in (`src/services/sync.ts`), gated + non-blocking.
-- 279 unit tests pass; `tsc` strict clean; full Metro bundle clean.
+- 291 unit tests pass; `tsc` strict clean; full Metro bundle clean.
 
 ## What remains for real users (gap analysis)
 
-**Social graph over the DB (data layer is ready; UI wiring is the next step)**
-- Feed/Discover/profiles read from `repo.fetchFeed/fetchDiscover/fetchStats`
-  instead of seeded demo data when signed in; olives/comments on *other users'*
-  meals (feed items not in the local store) go straight through the repo.
+**Done in the production-hardening pass (June 2026)**
+- UUID client ids (backend writes work), durable pending-op sync log with
+  replay, cross-account cache guard, hydrate-failure retry gate.
+- Privacy: owner-only `profiles` rows + `public_profiles` projection,
+  security-invoker `profile_stats`, Keychain-backed sessions, storage
+  size/MIME caps.
+- Abuse guards: per-user daily analyzer quota, input caps, timeouts both
+  sides, sanitized errors.
+- Compliance: in-app account deletion (`delete-account` function), privacy
+  policy + ToS screens, report/block (reports + blocks tables), Sign in with
+  Apple (native flow; provider config pending), demo-content labeling,
+  privacy manifest + export-compliance keys, eas.json, opaque app icon.
 
-**Auth**
-- **Sign in with Apple** (effectively required for a social iOS app): add
-  `expo-apple-authentication` + enable the Apple provider; map to Supabase auth.
-- In-app **account deletion** (Apple requirement once accounts exist).
-
-**Trust & safety (required before opening real UGC)**
-- Image moderation (non-food / inappropriate uploads) and comment moderation.
-- Report / block users; abuse + rate handling.
-
-**AI hardening**
-- Per-user rate limits and cost caps on the proxy; response caching.
-- Optional server-side re-validation of the analysis (defense in depth).
-- Nutrition accuracy: validate estimates against USDA FoodData Central.
-
-**Legal / compliance**
-- Privacy policy + ToS; GDPR/CCPA data export & delete (you now store PII + photos).
-
-**Ops & release**
-- Crash reporting (Sentry), analytics, backend logging/metrics.
-- EAS Build → TestFlight; APNs push (engagement); CI/CD.
-- Designed app icon set (current icons are generated procedurally).
+**Still open**
+- Social graph over the DB (data layer ready; Feed/Discover/profiles still
+  render seeded demo data — wire `repo.fetchFeed/fetchDiscover/fetchStats`).
+- Apple provider credentials in the Supabase dashboard (Services ID/key) and
+  Google OAuth production consent screen; reviewer demo account.
+- Host the privacy policy at a public URL for App Store Connect metadata.
+- Image/comment moderation tooling beyond report+block (a review queue).
+- Signed URLs (or per-meal ACL) for photos of private meals — the bucket is
+  public-read; uuid paths are unguessable but links are shareable.
+- Crash reporting (Sentry), analytics, APNs push, CI/CD, designed icon set.
+- Multi-device conflict policy beyond last-write-wins (updated_at guard,
+  tombstones for deletes).
 
 ## Deploy
 

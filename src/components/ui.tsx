@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Pressable,
   StyleSheet,
@@ -73,7 +74,7 @@ export function Button({ title, variant = 'primary', loading, disabled, icon, st
       ]}
       {...rest}>
       {loading ? (
-        <Text style={[styles.buttonText, { color: textColor }]}>…</Text>
+        <ActivityIndicator size="small" color={textColor} />
       ) : (
         <View style={styles.buttonInner}>
           {icon ? <Icon name={icon} size={18} color={textColor} /> : null}
@@ -120,6 +121,9 @@ export function Chip({
         styles.chip,
         selected && { backgroundColor: colors.oliveDeep },
         tone ? { backgroundColor: tone, borderColor: tone } : null,
+        // Color-swatch chips were pixel-identical selected vs not — give the
+        // selected swatch a visible ring.
+        tone && selected ? { borderWidth: 3, borderColor: colors.ink } : null,
       ]}>
       <Text style={[styles.chipText, selected && { color: colors.surface }]}>{label}</Text>
     </View>

@@ -96,6 +96,8 @@ export default function RootLayout() {
         <Stack.Screen name="meal/[id]" options={{ title: 'Meal' }} />
         <Stack.Screen name="user/[id]" options={{ title: '' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+        <Stack.Screen name="legal/privacy" options={{ title: 'Privacy Policy' }} />
+        <Stack.Screen name="legal/terms" options={{ title: 'Terms of Use' }} />
       </Stack>
       <ToastHost />
     </>

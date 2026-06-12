@@ -12,10 +12,12 @@ import { colors, fonts, MEAL_TYPE_LABELS, radius, spacing, type } from '@/compon
 import { timeLabel } from '@/domain/dates';
 import { computeHealthScore } from '@/domain/healthScore';
 import { newId } from '@/domain/ids';
+import { parseNumericInput } from '@/domain/numbers';
 import { mealTitle, validateAnalysis } from '@/domain/nutritionValidation';
 import type { Meal } from '@/domain/types';
 import { confirmAction } from '@/services/confirm';
-import { deletePhotos } from '@/services/photos';
+import { blockUser, reportContent } from '@/services/safety';
+import { deletePhotosForMeal } from '@/services/photos';
 import { useMealStore } from '@/store/mealStore';
 import { showToast } from '@/store/toastStore';
 import { canDeleteComment, useSocialStore } from '@/store/socialStore';
@@ -60,7 +62,7 @@ export default function MealDetailScreen() {
     return (
       <View style={styles.missing}>
         <Text style={type.heading}>Meal not found</Text>
-        <Button title="Go back" variant="secondary" onPress={() => router.back()} />
+        <Button title="Go back" variant="secondary" onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} />
       </View>
     );
   }
@@ -74,12 +76,16 @@ export default function MealDetailScreen() {
   };
 
   const saveEdits = () => {
+    if (parseNumericInput(calories) <= 0) {
+      showToast('Calories must be above zero.');
+      return;
+    }
     const next = validateAnalysis({
       ...meal.nutrition,
-      calories: Number(calories) || 0,
-      proteinG: Number(proteinG) || 0,
-      carbsG: Number(carbsG) || 0,
-      fatG: Number(fatG) || 0,
+      calories: parseNumericInput(calories),
+      proteinG: parseNumericInput(proteinG),
+      carbsG: parseNumericInput(carbsG),
+      fatG: parseNumericInput(fatG),
       fruitVegServings: meal.fruitVegServings,
       processingLevel: meal.processingLevel,
       confidence: meal.confidence,
@@ -110,10 +116,11 @@ export default function MealDetailScreen() {
       destructive: true,
     });
     if (!ok) return;
-    deletePhotos(meal.photoUris);
+    deletePhotosForMeal(meal.id);
     deleteMeal(meal.id);
     showToast('Meal deleted');
-    router.back();
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)');
   };
 
   const nutritionRows: [string, string][] = [
@@ -260,6 +267,7 @@ export default function MealDetailScreen() {
             canDeleteComment({ comment, mealOwnerId: meal.userId, meId: profile.id })
           }
           onDelete={(commentId) => deleteComment(meal.id, commentId)}
+          onReport={(comment) => reportContent('comment', comment.id)}
           onSubmit={(text) =>
             addComment(meal.id, {
               id: newId(),
@@ -276,7 +284,30 @@ export default function MealDetailScreen() {
           <Divider />
           <Button title="Delete meal" variant="danger" onPress={confirmDelete} />
         </>
-      ) : null}
+      ) : (
+        <>
+          <Divider />
+          <View style={styles.safetyRow}>
+            <Button
+              title="Report meal"
+              variant="ghost"
+              icon="flag"
+              onPress={() => reportContent('meal', meal.id)}
+              style={{ flex: 1 }}
+            />
+            <Button
+              title={`Block ${author?.displayName ?? 'user'}`}
+              variant="ghost"
+              icon="slash"
+              onPress={async () => {
+                await blockUser(meal.userId, author?.displayName ?? 'this user');
+                router.back();
+              }}
+              style={{ flex: 1 }}
+            />
+          </View>
+        </>
+      )}
     </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -323,4 +354,5 @@ const styles = StyleSheet.create({
   editGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(3) },
   editCell: { flexBasis: '46%', flexGrow: 1 },
   privacyRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
+  safetyRow: { flexDirection: 'row', gap: spacing(2) },
 });

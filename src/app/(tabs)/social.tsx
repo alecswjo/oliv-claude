@@ -4,7 +4,8 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MealCard } from '@/components/MealCard';
 import { UserRow } from '@/components/UserRow';
 import { Button, EmptyState } from '@/components/ui';
-import { colors, radius, spacing } from '@/components/theme';
+import { colors, radius, spacing, type } from '@/components/theme';
+import { isBackendConfigured } from '@/config';
 import { dayKeyFromIso } from '@/domain/dates';
 import { computeStreak } from '@/domain/streaks';
 import { averageScore } from '@/domain/summaries';
@@ -29,16 +30,17 @@ export default function SocialScreen() {
   const follow = useSocialStore((state) => state.follow);
   const unfollow = useSocialStore((state) => state.unfollow);
   const toggleOlive = useSocialStore((state) => state.toggleOlive);
+  const blockedIds = useSocialStore((state) => state.blockedIds);
 
   const feed = useMemo(
-    () => selectSocialFeed({ demoMeals, ownMeals, followingIds, meId: profile?.id }),
-    [demoMeals, ownMeals, followingIds, profile?.id],
+    () => selectSocialFeed({ demoMeals, ownMeals, followingIds, meId: profile?.id, blockedIds }),
+    [demoMeals, ownMeals, followingIds, profile?.id, blockedIds],
   );
   const visibleFeed = feed.slice(0, pages * PAGE_SIZE);
 
   const discover = useMemo(
-    () => selectDiscoverUsers(demoUsers, followingIds),
-    [demoUsers, followingIds],
+    () => selectDiscoverUsers(demoUsers, followingIds, blockedIds),
+    [demoUsers, followingIds, blockedIds],
   );
 
   const userById = useMemo(() => {
@@ -56,6 +58,13 @@ export default function SocialScreen() {
   };
 
   if (!profile) return null;
+
+  const demoNote = isBackendConfigured() ? (
+    <Text style={styles.demoNote}>
+      The eaters below are sample Oliv accounts so you can try the social features — finding real
+      friends is coming soon.
+    </Text>
+  ) : null;
 
   const Toggle = (
     <View style={styles.toggleRow}>
@@ -79,7 +88,12 @@ export default function SocialScreen() {
       <FlatList
         style={styles.list}
         contentContainerStyle={styles.content}
-        ListHeaderComponent={Toggle}
+        ListHeaderComponent={
+          <>
+            {Toggle}
+            {demoNote}
+          </>
+        }
         data={discover}
         keyExtractor={(user) => user.id}
         renderItem={({ item }) => (
@@ -162,4 +176,5 @@ const styles = StyleSheet.create({
   toggleActive: { backgroundColor: colors.white },
   toggleText: { fontSize: 14, fontWeight: '600', color: colors.slate },
   toggleTextActive: { color: colors.oliveDeep },
+  demoNote: { ...type.tiny, marginBottom: spacing(3), textAlign: 'center' as const },
 });

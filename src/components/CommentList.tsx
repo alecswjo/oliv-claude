@@ -13,6 +13,7 @@ export function CommentList({
   resolveUser,
   canDelete,
   onDelete,
+  onReport,
   onSubmit,
   now = new Date(),
 }: {
@@ -20,6 +21,8 @@ export function CommentList({
   resolveUser: (userId: string) => UserProfile | undefined;
   canDelete: (comment: Comment) => boolean;
   onDelete: (commentId: string) => void;
+  /** Report someone else's comment (UGC safety); shown when delete isn't. */
+  onReport?: (comment: Comment) => void;
   onSubmit: (text: string) => void;
   now?: Date;
 }) {
@@ -52,6 +55,10 @@ export function CommentList({
               {canDelete(comment) ? (
                 <PressableScale accessibilityRole="button" accessibilityLabel="Delete comment" hitSlop={10} onPress={() => onDelete(comment.id)}>
                   <Icon name="x" size={16} color={colors.ink30} />
+                </PressableScale>
+              ) : onReport ? (
+                <PressableScale accessibilityRole="button" accessibilityLabel="Report comment" hitSlop={10} onPress={() => onReport(comment)}>
+                  <Icon name="flag" size={14} color={colors.ink30} />
                 </PressableScale>
               ) : null}
             </View>

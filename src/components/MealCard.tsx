@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { timeLabel } from '@/domain/dates';
 import { mealTitle } from '@/domain/nutritionValidation';
 import type { Meal, UserProfile } from '@/domain/types';
@@ -56,6 +56,7 @@ export function MealCard({
 
   return (
     <PressableScale
+      accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
       accessibilityLabel={`Meal: ${title}, ${meal.nutrition.calories} calories, health score ${meal.healthScore.value} out of 5`}
       onPress={onPress}
       style={styles.card}>

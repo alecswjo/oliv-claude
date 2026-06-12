@@ -1,8 +1,8 @@
 import 'react-native-url-polyfill/auto';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
 import { isBackendConfigured, SUPABASE_ANON_KEY, SUPABASE_URL } from '@/config';
+import { sessionStorage } from './secureSession';
 
 /**
  * Lazily-created Supabase client. Null when the backend isn't configured, so
@@ -16,7 +16,8 @@ export function getSupabase(): SupabaseClient | null {
   if (!client) {
     client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
-        storage: AsyncStorage,
+        // Keychain-backed on native (chunked SecureStore); localStorage on web.
+        storage: sessionStorage,
         autoRefreshToken: true,
         persistSession: true,
         // PKCE + URL detection complete the OAuth redirect on web; on native
