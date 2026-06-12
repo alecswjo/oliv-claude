@@ -1,11 +1,12 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import type { UserProfile } from '@/domain/types';
-import { Button } from './ui';
+import { Flame } from './Icon';
+import { Button, PressableScale } from './ui';
 import { UserAvatar } from './UserAvatar';
-import { colors, radius, shadow, spacing, type } from './theme';
+import { colors, elevation, fonts, radius, scoreColor, spacing, type } from './theme';
 
-/** Discover / follower list row — spec §F4.3. */
+/** Discover / suggested-user row — spec §F4.3. */
 export function UserRow({
   user,
   stats,
@@ -20,13 +21,13 @@ export function UserRow({
   onToggleFollow: () => void;
 }) {
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
       accessibilityLabel={`${user.displayName}, @${user.username}`}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && { opacity: 0.92 }]}>
-      <UserAvatar emoji={user.avatarEmoji} color={user.avatarColor} size={46} />
-      <View style={{ flex: 1, gap: 2 }}>
+      style={styles.row}>
+      <UserAvatar emoji={user.avatarEmoji} color={user.avatarColor} size={48} />
+      <View style={{ flex: 1, gap: 3 }}>
         <Text style={type.bodyBold} numberOfLines={1}>
           {user.displayName}
         </Text>
@@ -34,9 +35,17 @@ export function UserRow({
           @{user.username}
         </Text>
         {stats ? (
-          <Text style={type.tiny}>
-            🔥 {stats.streak} streak{stats.avgScore != null ? `  ·  🫒 ${stats.avgScore.toFixed(1)} avg` : ''}
-          </Text>
+          <View style={styles.statsRow}>
+            <View style={styles.statChip}>
+              <Flame size={13} color={colors.ember} />
+              <Text style={styles.statText}>{stats.streak}</Text>
+            </View>
+            {stats.avgScore != null ? (
+              <View style={[styles.scoreDot, { backgroundColor: scoreColor(stats.avgScore) }]}>
+                <Text style={styles.scoreDotText}>{stats.avgScore.toFixed(1)}</Text>
+              </View>
+            ) : null}
+          </View>
         ) : null}
       </View>
       <Button
@@ -45,7 +54,7 @@ export function UserRow({
         onPress={onToggleFollow}
         style={styles.followButton}
       />
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -54,10 +63,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing(3),
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: spacing(3),
-    ...shadow.card,
+    ...elevation.card,
   },
-  followButton: { minHeight: 40, paddingVertical: spacing(2), paddingHorizontal: spacing(3.5) },
+  statsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginTop: 1 },
+  statChip: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  statText: { fontFamily: fonts.sansSemi, fontSize: 12, color: colors.ink50, fontVariant: ['tabular-nums'] },
+  scoreDot: { borderRadius: radius.full, paddingHorizontal: 7, paddingVertical: 1 },
+  scoreDotText: { fontFamily: fonts.display, fontSize: 11, color: colors.surface, fontVariant: ['tabular-nums'] },
+  followButton: { minHeight: 40, paddingVertical: spacing(2), paddingHorizontal: spacing(4) },
 });

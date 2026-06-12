@@ -1,15 +1,16 @@
 import { Redirect, Tabs, useRouter } from 'expo-router';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors } from '@/components/theme';
+import { Icon, type IconName } from '@/components/Icon';
+import { colors, elevation, fonts } from '@/components/theme';
 import { useAuthStore } from '@/store/authStore';
 import { useUserStore } from '@/store/userStore';
 
-function TabGlyph({ glyph, label, focused }: { glyph: string; label: string; focused: boolean }) {
+function TabGlyph({ icon, label, focused }: { icon: IconName; label: string; focused: boolean }) {
   return (
     <View style={styles.tabItem}>
-      <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.45 }}>{glyph}</Text>
-      <Text style={[styles.tabLabel, focused && { color: colors.oliveDeep, opacity: 1 }]}>{label}</Text>
+      <Icon name={icon} size={22} color={focused ? colors.olive : colors.ink30} />
+      <Text style={[styles.tabLabel, focused && { color: colors.oliveDeep }]}>{label}</Text>
     </View>
   );
 }
@@ -31,31 +32,25 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: colors.cream },
+        headerStyle: { backgroundColor: colors.paper },
         headerShadowVisible: false,
-        headerTitleStyle: { fontWeight: '800', color: colors.oliveDeep, fontSize: 22 },
+        headerTitleStyle: { fontFamily: fonts.display, color: colors.oliveDeep, fontSize: 22, letterSpacing: -0.4 },
         tabBarStyle: {
-          backgroundColor: colors.white,
+          backgroundColor: colors.surface,
           borderTopColor: colors.line,
-          height: 84,
-          paddingTop: 6,
+          height: 86,
+          paddingTop: 8,
         },
         tabBarShowLabel: false,
-        sceneStyle: { backgroundColor: colors.cream },
+        sceneStyle: { backgroundColor: colors.paper },
       }}>
       <Tabs.Screen
         name="index"
-        options={{
-          title: 'Oliv',
-          tabBarIcon: ({ focused }) => <TabGlyph glyph="🏠" label="My Feed" focused={focused} />,
-        }}
+        options={{ title: 'Oliv', tabBarIcon: ({ focused }) => <TabGlyph icon="home" label="Feed" focused={focused} /> }}
       />
       <Tabs.Screen
         name="social"
-        options={{
-          title: 'Social',
-          tabBarIcon: ({ focused }) => <TabGlyph glyph="👥" label="Social" focused={focused} />,
-        }}
+        options={{ title: 'Social', tabBarIcon: ({ focused }) => <TabGlyph icon="users" label="Social" focused={focused} /> }}
       />
       <Tabs.Screen
         name="log-tab"
@@ -68,7 +63,7 @@ export default function TabsLayout() {
               onPress={() => router.push('/log')}
               style={[styles.logButtonWrap, props.style as object]}>
               <View style={styles.logButton}>
-                <Text style={{ fontSize: 26, color: colors.white }}>📷</Text>
+                <Icon name="plus" size={28} color={colors.surface} />
               </View>
             </Pressable>
           ),
@@ -82,38 +77,28 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="progress"
-        options={{
-          title: 'Progress',
-          tabBarIcon: ({ focused }) => <TabGlyph glyph="📈" label="Progress" focused={focused} />,
-        }}
+        options={{ title: 'Progress', tabBarIcon: ({ focused }) => <TabGlyph icon="bar-chart-2" label="Progress" focused={focused} /> }}
       />
       <Tabs.Screen
         name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ focused }) => <TabGlyph glyph="🫒" label="Profile" focused={focused} />,
-        }}
+        options={{ title: 'Profile', tabBarIcon: ({ focused }) => <TabGlyph icon="user" label="Profile" focused={focused} /> }}
       />
     </Tabs>
   );
 }
 
 const styles = StyleSheet.create({
-  tabItem: { alignItems: 'center', gap: 2, width: 64 },
-  tabLabel: { fontSize: 10, fontWeight: '600', color: colors.slate, opacity: 0.6 },
+  tabItem: { alignItems: 'center', gap: 3, width: 64 },
+  tabLabel: { fontFamily: fonts.sansSemi, fontSize: 10, color: colors.ink30, letterSpacing: 0.2 },
   logButtonWrap: { alignItems: 'center', justifyContent: 'center' },
   logButton: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 56,
+    height: 56,
+    borderRadius: 20,
     backgroundColor: colors.olive,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -22,
-    shadowColor: colors.oliveDeep,
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    marginTop: -20,
+    ...elevation.raised,
   },
 });

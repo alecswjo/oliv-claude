@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { relativeLabel } from '@/domain/dates';
 import type { Comment, UserProfile } from '@/domain/types';
-import { Button, Field } from './ui';
+import { Icon } from './Icon';
+import { Button, Field, PressableScale } from './ui';
 import { UserAvatar } from './UserAvatar';
 import { colors, spacing, type } from './theme';
 
@@ -40,11 +41,7 @@ export function CommentList({
           const author = resolveUser(comment.userId);
           return (
             <View key={comment.id} style={styles.comment}>
-              <UserAvatar
-                emoji={author?.avatarEmoji ?? '🙂'}
-                color={author?.avatarColor ?? colors.olive}
-                size={30}
-              />
+              <UserAvatar emoji={author?.avatarEmoji ?? '🙂'} color={author?.avatarColor ?? colors.olive} size={32} />
               <View style={{ flex: 1, gap: 2 }}>
                 <View style={styles.commentHeader}>
                   <Text style={type.smallBold}>{author?.displayName ?? 'Someone'}</Text>
@@ -53,13 +50,9 @@ export function CommentList({
                 <Text style={type.body}>{comment.text}</Text>
               </View>
               {canDelete(comment) ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Delete comment"
-                  hitSlop={10}
-                  onPress={() => onDelete(comment.id)}>
-                  <Text style={{ color: colors.faint, fontSize: 16 }}>✕</Text>
-                </Pressable>
+                <PressableScale accessibilityRole="button" accessibilityLabel="Delete comment" hitSlop={10} onPress={() => onDelete(comment.id)}>
+                  <Icon name="x" size={16} color={colors.ink30} />
+                </PressableScale>
               ) : null}
             </View>
           );
@@ -87,5 +80,5 @@ const styles = StyleSheet.create({
   comment: { flexDirection: 'row', gap: spacing(2.5), alignItems: 'flex-start' },
   commentHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing(2) },
   inputRow: { flexDirection: 'row', gap: spacing(2), alignItems: 'flex-end' },
-  postButton: { minHeight: 48 },
+  postButton: { minHeight: 50 },
 });

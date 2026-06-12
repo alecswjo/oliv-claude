@@ -75,10 +75,10 @@ export default function MyFeedScreen() {
       )}
       ListEmptyComponent={
         <EmptyState
-          emoji="🫒"
+          icon="camera"
           title="Your plate awaits"
           body="Snap a photo of your next meal and Oliv will figure out the calories, macros, and how healthy it really is."
-          action={<Button title="Log your first meal" onPress={() => router.push('/log')} />}
+          action={<Button title="Log your first meal" icon="plus" onPress={() => router.push('/log')} />}
         />
       }
     />

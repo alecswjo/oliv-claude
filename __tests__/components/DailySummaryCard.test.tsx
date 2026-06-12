@@ -24,8 +24,8 @@ describe('DailySummaryCard', () => {
     await render(<DailySummaryCard summary={summary()} goals={goals} streak={5} />);
     expect(screen.getByLabelText('1400 of 2000 calories eaten')).toBeTruthy();
     expect(screen.getByLabelText('600 calories remaining')).toBeTruthy();
-    expect(screen.getByText('🔥 5')).toBeTruthy();
-    expect(screen.getByText('🫒 4.2')).toBeTruthy();
+    expect(screen.getByLabelText('5 day streak')).toBeTruthy();
+    expect(screen.getByText('4.2')).toBeTruthy(); // graded avg score
     expect(screen.getByText('3')).toBeTruthy(); // meals today
   });
 

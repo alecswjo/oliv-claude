@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Flame } from '@/components/Icon';
 import { Card } from '@/components/ui';
-import { colors, radius, spacing, type } from '@/components/theme';
+import { colors, fonts, radius, scoreColor, spacing, type } from '@/components/theme';
 import { dayKeyFromIso, lastNDayKeys } from '@/domain/dates';
 import { computeStreak } from '@/domain/streaks';
 import { averageScore, caloriesByDay } from '@/domain/summaries';
@@ -39,15 +40,20 @@ export default function ProgressScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Card style={styles.streakCard}>
-        <Text style={{ fontSize: 40 }}>🔥</Text>
-        <View>
-          <Text style={styles.streakNumber}>{streak} day{streak === 1 ? '' : 's'}</Text>
-          <Text style={type.small}>current streak · longest {longest}</Text>
+        <View style={styles.streakBadge}>
+          <Flame size={26} color={colors.ember} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <View style={styles.streakNumberRow}>
+            <Text style={styles.streakNumber}>{streak}</Text>
+            <Text style={styles.streakUnit}>day{streak === 1 ? '' : 's'}</Text>
+          </View>
+          <Text style={type.micro}>Current streak · longest {longest}</Text>
         </View>
       </Card>
 
       <Card>
-        <Text style={[type.heading, { marginBottom: spacing(3) }]}>Last 7 days</Text>
+        <Text style={[type.micro, { marginBottom: spacing(3) }]}>Last 7 days</Text>
         <View style={styles.chartArea}>
           {/* target line */}
           <View
@@ -60,24 +66,24 @@ export default function ProgressScreen() {
               const over = day.calories > target;
               return (
                 <View key={day.dayKey} style={styles.barColumn}>
-                  <Text style={[type.tiny, type.numeric, { fontSize: 9 }]}>
-                    {day.calories > 0 ? day.calories : ''}
+                  <Text style={[styles.barValue, day.calories === 0 && { opacity: 0 }]}>
+                    {day.calories > 0 ? day.calories : '0'}
                   </Text>
                   <View
                     accessibilityLabel={`${day.dayKey}: ${day.calories} calories`}
                     style={[
                       styles.bar,
-                      { height, backgroundColor: over ? colors.terracotta : colors.olive },
+                      { height, backgroundColor: over ? colors.ember : colors.olive },
                       day.calories === 0 && { backgroundColor: colors.oliveSoft },
                     ]}
                   />
-                  <Text style={type.tiny}>{day.dayKey.slice(8)}</Text>
+                  <Text style={styles.barDay}>{day.dayKey.slice(8)}</Text>
                 </View>
               );
             })}
           </View>
         </View>
-        <Text style={[type.tiny, { marginTop: spacing(2) }]}>
+        <Text style={[type.tiny, { marginTop: spacing(3) }]}>
           Dashed line = your {target} kcal target (today's goal applied to all days)
         </Text>
       </Card>
@@ -85,19 +91,21 @@ export default function ProgressScreen() {
       <View style={styles.statsGrid}>
         <Card style={styles.statCard}>
           <Text style={styles.statValue}>{meals.length}</Text>
-          <Text style={type.tiny}>meals logged</Text>
+          <Text style={type.micro}>Meals logged</Text>
         </Card>
         <Card style={styles.statCard}>
           <Text style={styles.statValue}>{avgCalories || '—'}</Text>
-          <Text style={type.tiny}>avg kcal / active day</Text>
+          <Text style={type.micro}>Avg kcal / day</Text>
         </Card>
         <Card style={styles.statCard}>
-          <Text style={styles.statValue}>{avgScore != null ? avgScore.toFixed(1) : '—'}</Text>
-          <Text style={type.tiny}>7-day avg score</Text>
+          <Text style={[styles.statValue, avgScore != null && { color: scoreColor(avgScore) }]}>
+            {avgScore != null ? avgScore.toFixed(1) : '—'}
+          </Text>
+          <Text style={type.micro}>7-day avg score</Text>
         </Card>
         <Card style={styles.statCard}>
           <Text style={styles.statValue}>{daysWithMeals}/7</Text>
-          <Text style={type.tiny}>days logged</Text>
+          <Text style={type.micro}>Days logged</Text>
         </Card>
       </View>
     </ScrollView>
@@ -105,10 +113,20 @@ export default function ProgressScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.cream },
+  screen: { flex: 1, backgroundColor: colors.paper },
   content: { padding: spacing(4), gap: spacing(4), paddingBottom: spacing(10) },
-  streakCard: { flexDirection: 'row', alignItems: 'center', gap: spacing(4) },
-  streakNumber: { fontSize: 26, fontWeight: '800', color: colors.oliveDeep },
+  streakCard: { flexDirection: 'row', alignItems: 'center', gap: spacing(3.5) },
+  streakBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.full,
+    backgroundColor: colors.emberSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  streakNumberRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing(1.5) },
+  streakNumber: { fontFamily: fonts.display, fontSize: 32, color: colors.oliveDeep, letterSpacing: -1, fontVariant: ['tabular-nums'] },
+  streakUnit: { fontFamily: fonts.sansSemi, fontSize: 15, color: colors.ink50 },
   chartArea: { position: 'relative' },
   targetLine: {
     position: 'absolute',
@@ -121,9 +139,11 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   barsRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing(2) },
-  barColumn: { flex: 1, alignItems: 'center', gap: 4 },
+  barColumn: { flex: 1, alignItems: 'center', gap: 5 },
   bar: { width: '100%', borderRadius: radius.sm },
+  barValue: { fontFamily: fonts.display, fontSize: 10, color: colors.ink50, fontVariant: ['tabular-nums'] },
+  barDay: { fontFamily: fonts.sansMed, fontSize: 11, color: colors.ink30 },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(3) },
-  statCard: { flexBasis: '47%', flexGrow: 1, alignItems: 'center', gap: 4 },
-  statValue: { fontSize: 24, fontWeight: '800', color: colors.oliveDeep, fontVariant: ['tabular-nums'] },
+  statCard: { flexBasis: '47%', flexGrow: 1, alignItems: 'center', gap: spacing(1) },
+  statValue: { fontFamily: fonts.display, fontSize: 26, color: colors.oliveDeep, letterSpacing: -0.5, fontVariant: ['tabular-nums'] },
 });
