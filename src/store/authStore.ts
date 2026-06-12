@@ -49,6 +49,14 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     if (isBackendConfigured()) {
       const { signOut } = await import('@/services/supabase/auth');
       await signOut();
+      // Clear the local cache so another account signing in on this device
+      // doesn't inherit (and re-sync) the previous user's profile and meals.
+      const [{ useUserStore }, { useMealStore }] = await Promise.all([
+        import('@/store/userStore'),
+        import('@/store/mealStore'),
+      ]);
+      useUserStore.getState().reset();
+      useMealStore.getState().reset();
     }
     set({ status: 'signedOut', userId: null, email: undefined });
   },

@@ -33,8 +33,32 @@ author or the meal owner).
 ## 2. Auth
 
 In the dashboard → **Authentication → Providers**, enable **Email** (works out
-of the box). For production, also enable **Sign in with Apple** (required for a
-social iOS app) — see docs/PRODUCTION.md.
+of the box). While no SMTP server is configured, also turn on auto-confirm
+(Authentication → Providers → Email → "Confirm email" off) or sign-ups will
+wait on a rate-limited confirmation mail.
+
+### OAuth (Google / Apple)
+
+The app's sign-in screen has "Continue with Google/Apple" buttons (PKCE flow:
+full-page redirect on web, in-app browser + code exchange on native). Each
+provider needs credentials pasted into dashboard → **Authentication →
+Providers**:
+
+- **Google**: create an OAuth client (type "Web application") in
+  [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+  with authorized redirect URI
+  `https://<PROJECT-REF>.supabase.co/auth/v1/callback`, then paste the client
+  id + secret into the Google provider.
+- **Apple**: in the Apple Developer portal create a **Services ID** with
+  "Sign in with Apple" enabled and the same callback URL, plus a key for the
+  Sign in with Apple capability; paste the Services ID (client id) and the
+  generated secret JWT into the Apple provider. (Native iOS builds should
+  eventually use the native Apple button — see docs/PRODUCTION.md.)
+
+For native deep-link redirects, add the app scheme to dashboard →
+**Authentication → URL Configuration → Redirect URLs**: `oliv://**` (plus
+`exp://**` while testing in Expo Go, and your web origin, e.g.
+`http://localhost:8081/**`, for web dev).
 
 ## 3. Analysis proxy (the server-side key)
 

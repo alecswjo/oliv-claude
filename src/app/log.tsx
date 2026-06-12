@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { HealthScoreBadge } from '@/components/HealthScoreBadge';
 import { ScoreBreakdown } from '@/components/ScoreBreakdown';
 import { Button, Card, Chip, Divider, Field } from '@/components/ui';
@@ -231,6 +231,26 @@ export default function LogMealScreen() {
 
   if (!profile) return null;
 
+  /* ---------------------------- analyzing phase ---------------------------- */
+  if (analyzing) {
+    return (
+      <View style={styles.analyzingScreen}>
+        {photo ? (
+          <Image source={{ uri: photo.uri }} style={styles.analyzingPhoto} contentFit="cover" />
+        ) : (
+          <View style={styles.analyzingTile}>
+            <Text style={{ fontSize: 44 }}>{MEAL_TYPE_EMOJI[mealType]}</Text>
+          </View>
+        )}
+        <ActivityIndicator size="large" color={colors.olive} />
+        <Text style={type.heading}>Reading your plate…</Text>
+        <Text style={[type.small, { textAlign: 'center' }]}>
+          Identifying foods and estimating nutrition
+        </Text>
+      </View>
+    );
+  }
+
   /* ----------------------------- compose phase ----------------------------- */
   if (!reviewing) {
     return (
@@ -290,11 +310,7 @@ export default function LogMealScreen() {
 
         {inputError ? <Text style={styles.error}>{inputError}</Text> : null}
 
-        <Button
-          title={analyzing ? 'Reading your plate…' : 'Analyze with AI'}
-          loading={analyzing}
-          onPress={analyze}
-        />
+        <Button title="Analyze with AI" onPress={analyze} />
         <Button
           title="Enter manually instead"
           variant="ghost"
@@ -433,6 +449,23 @@ export default function LogMealScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.cream },
   content: { padding: spacing(4), gap: spacing(4), paddingBottom: spacing(12) },
+  analyzingScreen: {
+    flex: 1,
+    backgroundColor: colors.cream,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing(4),
+    padding: spacing(6),
+  },
+  analyzingPhoto: { width: 132, height: 132, borderRadius: radius.lg, backgroundColor: colors.oliveSoft },
+  analyzingTile: {
+    width: 132,
+    height: 132,
+    borderRadius: radius.lg,
+    backgroundColor: colors.oliveSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   photoArea: {
     height: 180,
     borderRadius: radius.lg,

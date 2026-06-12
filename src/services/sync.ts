@@ -29,23 +29,55 @@ function logSyncError(op: string) {
 }
 
 function isLocalUri(uri: string): boolean {
-  return uri.startsWith('file:') || uri.startsWith('content:') || uri.startsWith('/');
+  return (
+    uri.startsWith('file:') ||
+    uri.startsWith('content:') ||
+    uri.startsWith('blob:') || // web
+    uri.startsWith('data:') || // web
+    uri.startsWith('/')
+  );
 }
+
+/**
+ * Pushes run through a single queue so they land in the order they were made.
+ * Without this, the meal insert can race the profile insert it references
+ * (FK + RLS) and lose. A failed op is logged and never blocks the queue.
+ */
+let queue: Promise<void> = Promise.resolve();
 
 function run(op: string, fn: () => Promise<unknown>): void {
   if (!backendActive()) return;
-  void fn().catch(logSyncError(op));
+  queue = queue.then(fn).then(
+    () => undefined,
+    (err) => logSyncError(op)(err),
+  );
+}
+
+/** Test/await seam: resolves when every queued push so far has settled. */
+export function flushSync(): Promise<void> {
+  return queue;
+}
+
+/** Insert the meal row and, when the photo is a local file, mirror it to Storage. */
+async function insertMealWithPhoto(meal: Meal): Promise<void> {
+  const repo = await import('@/services/supabase/repo');
+  await repo.insertMeal(meal);
+  if (meal.photoUri && isLocalUri(meal.photoUri)) {
+    const photos = await import('@/services/supabase/photos');
+    const path = await photos.uploadMealPhoto({ fileUri: meal.photoUri }, meal.userId, meal.id);
+    await repo.setMealPhotoPath(meal.id, path);
+  }
 }
 
 export function pushNewMeal(meal: Meal): void {
   run('pushNewMeal', async () => {
+    // The meal row references the profile row (FK + RLS), so make sure the
+    // profile exists even if its own push was lost — upsert is idempotent.
     const repo = await import('@/services/supabase/repo');
-    await repo.insertMeal(meal);
-    if (meal.photoUri && isLocalUri(meal.photoUri)) {
-      const photos = await import('@/services/supabase/photos');
-      const path = await photos.uploadMealPhoto({ fileUri: meal.photoUri }, meal.userId, meal.id);
-      await repo.setMealPhotoPath(meal.id, path);
-    }
+    const { useUserStore } = await import('@/store/userStore');
+    const profile = useUserStore.getState().profile;
+    if (profile) await repo.upsertProfile(profile).catch(logSyncError('ensureProfile'));
+    await insertMealWithPhoto(meal);
   });
 }
 
@@ -94,10 +126,21 @@ export function pushProfile(profile: UserProfile): void {
 }
 
 /**
- * After sign-in, load the user's profile + own meals from the backend into the
- * local stores. Returns whether a server profile existed (so the caller can
- * route to onboarding when it didn't). Dynamically imports stores to avoid any
- * static cycle; only ever runs in backend mode.
+ * After sign-in, reconcile the server state with the local stores.
+ *
+ * - Profile: a server profile wins. When the server has none but a local one
+ *   exists (the device onboarded offline / before sign-in), the local profile
+ *   is re-keyed to the authenticated user id and created server-side, so
+ *   existing users keep their identity instead of redoing onboarding.
+ * - Meals: NEVER blindly replace local with server. Local meals the server
+ *   doesn't have (missed/failed pushes, offline logging) are re-keyed to the
+ *   authenticated user and pushed back; both sets are merged. A meal can
+ *   resurrect after being deleted on another device — acceptable next to
+ *   silently losing logged data.
+ *
+ * Returns whether a profile now exists (so callers route to onboarding when
+ * it doesn't). Dynamically imports stores to avoid any static cycle; only
+ * ever runs in backend mode.
  */
 export async function hydrateForUser(userId: string): Promise<{ hasProfile: boolean }> {
   if (!isBackendConfigured()) return { hasProfile: false };
@@ -105,12 +148,34 @@ export async function hydrateForUser(userId: string): Promise<{ hasProfile: bool
   const { useUserStore } = await import('@/store/userStore');
   const { useMealStore } = await import('@/store/mealStore');
 
-  const [profile, meals] = await Promise.all([
+  let [profile, serverMeals] = await Promise.all([
     repo.fetchProfile(userId),
     repo.fetchOwnMeals(userId),
   ]);
 
+  if (!profile) {
+    const local = useUserStore.getState().profile;
+    if (local) {
+      profile = { ...local, id: userId };
+      await repo.upsertProfile(profile).catch(logSyncError('hydrate.adoptProfile'));
+    }
+  }
   if (profile) useUserStore.getState().adoptProfile(profile);
-  useMealStore.getState().replaceAll(meals);
+
+  const serverIds = new Set(serverMeals.map((meal) => meal.id));
+  const localOnly = useMealStore
+    .getState()
+    .meals.filter((meal) => !serverIds.has(meal.id))
+    .map((meal) => ({ ...meal, userId }));
+  if (profile) {
+    for (const meal of localOnly) {
+      await insertMealWithPhoto(meal).catch(logSyncError('hydrate.pushLocalMeal'));
+    }
+  }
+
+  const merged = [...localOnly, ...serverMeals].sort((a, b) =>
+    a.loggedAt < b.loggedAt ? 1 : -1,
+  );
+  useMealStore.getState().replaceAll(merged);
   return { hasProfile: profile != null };
 }

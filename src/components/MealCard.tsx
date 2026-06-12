@@ -51,7 +51,6 @@ export function MealCard({
 
   return (
     <Pressable
-      accessibilityRole="button"
       accessibilityLabel={`Meal: ${title}, ${meal.nutrition.calories} calories, health score ${meal.healthScore.value} out of 5`}
       onPress={onPress}
       style={({ pressed }) => [styles.card, pressed && { opacity: 0.92 }]}>
