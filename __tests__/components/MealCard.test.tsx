@@ -38,10 +38,11 @@ describe('MealCard', () => {
   it('renders title, calories, macros, time, score, and counts', async () => {
     await render(<MealCard meal={meal()} isOwn oliveActive={false} />);
     expect(screen.getByText('Chicken bowl · Avocado')).toBeTruthy();
-    expect(screen.getByText('520 kcal')).toBeTruthy();
-    expect(screen.getByText('P 35g')).toBeTruthy();
-    expect(screen.getByText('C 48g')).toBeTruthy();
-    expect(screen.getByText('F 18g')).toBeTruthy();
+    expect(screen.getByText('520')).toBeTruthy();
+    expect(screen.getByText('Calories')).toBeTruthy();
+    expect(screen.getByText('35g')).toBeTruthy();
+    expect(screen.getByText('48g')).toBeTruthy();
+    expect(screen.getByText('18g')).toBeTruthy();
     expect(screen.getByText(/Lunch · 12:30 PM/)).toBeTruthy();
     expect(screen.getByLabelText('Health score 4.5 out of 5')).toBeTruthy();
     expect(screen.getByText('2')).toBeTruthy(); // olives

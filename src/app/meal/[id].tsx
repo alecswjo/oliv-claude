@@ -4,10 +4,11 @@ import React, { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { CommentList } from '@/components/CommentList';
 import { HealthScoreBadge } from '@/components/HealthScoreBadge';
+import { Icon } from '@/components/Icon';
 import { ScoreBreakdown } from '@/components/ScoreBreakdown';
 import { UserAvatar } from '@/components/UserAvatar';
-import { Button, Card, Divider, Field } from '@/components/ui';
-import { colors, MEAL_TYPE_LABELS, radius, spacing, type } from '@/components/theme';
+import { Button, Card, Divider, Field, PressableScale } from '@/components/ui';
+import { colors, fonts, MEAL_TYPE_LABELS, radius, spacing, type } from '@/components/theme';
 import { timeLabel } from '@/domain/dates';
 import { computeHealthScore } from '@/domain/healthScore';
 import { newId } from '@/domain/ids';
@@ -39,6 +40,7 @@ export default function MealDetailScreen() {
 
   const isOwn = Boolean(meal && profile && meal.userId === profile.id);
   const author = isOwn ? profile : demoUsers.find((user) => user.id === meal?.userId);
+  const oliveActive = Boolean(meal && profile && meal.oliveUserIds.includes(profile.id));
 
   const [editing, setEditing] = useState(false);
   const [calories, setCalories] = useState('');
@@ -137,10 +139,12 @@ export default function MealDetailScreen() {
               {author?.displayName ?? 'Someone'}
               {isOwn ? <Text style={{ color: colors.olive }}> · You</Text> : null}
             </Text>
-            <Text style={type.tiny}>
-              {MEAL_TYPE_LABELS[meal.mealType]} · {timeLabel(meal.loggedAt)}
-              {meal.isPrivate ? ' · 🔒 Private' : ''}
-            </Text>
+            <View style={styles.metaRow}>
+              <Text style={type.tiny}>
+                {MEAL_TYPE_LABELS[meal.mealType]} · {timeLabel(meal.loggedAt)}
+              </Text>
+              {meal.isPrivate ? <Icon name="lock" size={12} color={colors.ink30} accessibilityLabel="Private" /> : null}
+            </View>
           </View>
         </View>
 
@@ -157,12 +161,16 @@ export default function MealDetailScreen() {
 
         <View style={styles.scoreRow}>
           <HealthScoreBadge value={meal.healthScore.value} size="lg" />
-          <Button
-            title={`🫒 ${meal.oliveUserIds.length}`}
-            variant={meal.oliveUserIds.includes(profile.id) ? 'secondary' : 'ghost'}
+          <PressableScale
+            accessibilityRole="button"
+            accessibilityLabel={oliveActive ? 'Remove olive' : 'Give an olive'}
             onPress={() => toggleOlive(meal.id, profile.id)}
-            style={styles.oliveButton}
-          />
+            style={[styles.oliveButton, oliveActive && { backgroundColor: colors.oliveSoft, borderColor: colors.olive }]}>
+            <Text style={{ fontSize: 16 }}>🫒</Text>
+            <Text style={[styles.oliveCount, oliveActive && { color: colors.oliveDeep }]}>
+              {meal.oliveUserIds.length}
+            </Text>
+          </PressableScale>
         </View>
       </Card>
 
@@ -258,6 +266,7 @@ const styles = StyleSheet.create({
   content: { padding: spacing(4), gap: spacing(4), paddingBottom: spacing(12) },
   missing: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing(4), backgroundColor: colors.cream },
   authorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(2.5) },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   photo: { width: '100%', height: 220, borderRadius: radius.lg, backgroundColor: colors.oliveSoft },
   emojiTile: {
     width: '100%',
@@ -268,7 +277,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  oliveButton: { minHeight: 40, paddingVertical: spacing(2) },
+  oliveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: spacing(3.5),
+    paddingVertical: spacing(2),
+    borderRadius: radius.full,
+    borderWidth: 1.5,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+  },
+  oliveCount: { fontFamily: fonts.sansBold, fontSize: 15, color: colors.ink70, fontVariant: ['tabular-nums'] },
   nutritionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   smallButton: { minHeight: 32, paddingVertical: 4, paddingHorizontal: spacing(3) },
   nutritionRow: {

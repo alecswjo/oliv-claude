@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { HealthScoreBadge } from '@/components/HealthScoreBadge';
+import { Icon } from '@/components/Icon';
 import { ScoreBreakdown } from '@/components/ScoreBreakdown';
 import { Button, Card, Chip, Divider, Field } from '@/components/ui';
 import { colors, MEAL_TYPE_EMOJI, MEAL_TYPE_LABELS, radius, spacing, type } from '@/components/theme';
@@ -264,7 +265,9 @@ export default function LogMealScreen() {
             <Image source={{ uri: photo.uri }} style={styles.photoPreview} contentFit="cover" />
           ) : (
             <View style={{ alignItems: 'center', gap: spacing(2) }}>
-              <Text style={{ fontSize: 40 }}>📷</Text>
+              <View style={styles.photoIconBadge}>
+                <Icon name="camera" size={26} color={colors.olive} />
+              </View>
               <Text style={type.small}>Tap to choose a photo</Text>
             </View>
           )}
@@ -478,6 +481,14 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   photoPreview: { width: '100%', height: '100%' },
+  photoIconBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   photoButtons: { flexDirection: 'row', gap: spacing(3) },
   noticeCard: { backgroundColor: colors.amberSoft, gap: spacing(2) },
   fieldLabel: { ...type.smallBold, color: colors.oliveDeep },

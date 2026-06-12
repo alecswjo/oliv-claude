@@ -1,10 +1,11 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { Flame } from '@/components/Icon';
 import { MealCard } from '@/components/MealCard';
 import { UserAvatar } from '@/components/UserAvatar';
 import { Button, Card, EmptyState } from '@/components/ui';
-import { colors, spacing, type } from '@/components/theme';
+import { colors, fonts, scoreColor, spacing, type } from '@/components/theme';
 import { dayKeyFromIso } from '@/domain/dates';
 import { computeStreak } from '@/domain/streaks';
 import { averageScore } from '@/domain/summaries';
@@ -59,33 +60,46 @@ export default function UserProfileScreen() {
         keyExtractor={(meal) => meal.id}
         ListHeaderComponent={
           <Card style={styles.header}>
-            <UserAvatar emoji={user.avatarEmoji} color={user.avatarColor} size={72} />
-            <Text style={type.title}>{user.displayName}</Text>
-            <Text style={type.small}>@{user.username}</Text>
-            <Text style={[type.body, { textAlign: 'center' }]}>{user.bio}</Text>
+            <View style={styles.identity}>
+              <UserAvatar emoji={user.avatarEmoji} color={user.avatarColor} size={64} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={type.title}>{user.displayName}</Text>
+                <Text style={type.small}>@{user.username}</Text>
+              </View>
+            </View>
+            {user.bio ? <Text style={[type.body, styles.bio]}>{user.bio}</Text> : null}
 
             <View style={styles.statRow}>
               <View style={styles.stat}>
                 <Text style={styles.statValue}>{counts.followers}</Text>
-                <Text style={type.tiny}>followers</Text>
+                <Text style={type.micro}>Followers</Text>
               </View>
+              <View style={styles.statDivider} />
               <View style={styles.stat}>
                 <Text style={styles.statValue}>{counts.following}</Text>
-                <Text style={type.tiny}>following</Text>
+                <Text style={type.micro}>Following</Text>
               </View>
-              <View style={styles.stat}>
-                <Text style={styles.statValue}>🔥{streak}</Text>
-                <Text style={type.tiny}>streak</Text>
+              <View style={styles.statDivider} />
+              <View style={styles.stat} accessibilityLabel={`${streak} day streak`}>
+                <View style={styles.streakValue}>
+                  <Flame size={15} color={colors.ember} />
+                  <Text style={styles.statValue}>{streak}</Text>
+                </View>
+                <Text style={type.micro}>Streak</Text>
               </View>
+              <View style={styles.statDivider} />
               <View style={styles.stat}>
-                <Text style={styles.statValue}>{avgScore != null ? avgScore.toFixed(1) : '—'}</Text>
-                <Text style={type.tiny}>avg score</Text>
+                <Text style={[styles.statValue, avgScore != null && { color: scoreColor(avgScore) }]}>
+                  {avgScore != null ? avgScore.toFixed(1) : '—'}
+                </Text>
+                <Text style={type.micro}>Avg</Text>
               </View>
             </View>
 
             <Button
-              title={following ? 'Following ✓' : 'Follow'}
+              title={following ? 'Following' : 'Follow'}
               variant={following ? 'secondary' : 'primary'}
+              icon={following ? 'check' : 'user-plus'}
               onPress={() => (following ? unfollow(user.id) : follow(user.id))}
               style={{ alignSelf: 'stretch' }}
             />
@@ -103,7 +117,7 @@ export default function UserProfileScreen() {
           </View>
         )}
         ListEmptyComponent={
-          <EmptyState emoji="🍽️" title="No meals yet" body="Nothing public on this plate so far." />
+          <EmptyState icon="inbox" title="No meals yet" body="Nothing public on this plate so far." />
         }
       />
     </>
@@ -111,18 +125,23 @@ export default function UserProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.cream },
+  screen: { flex: 1, backgroundColor: colors.paper },
   content: { padding: spacing(4), paddingBottom: spacing(10) },
-  missing: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing(4), backgroundColor: colors.cream },
-  header: { alignItems: 'center', gap: spacing(2) },
+  missing: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing(4), backgroundColor: colors.paper },
+  header: { gap: spacing(3.5) },
+  identity: { flexDirection: 'row', alignItems: 'center', gap: spacing(3.5) },
+  bio: { color: colors.ink70 },
   statRow: {
     flexDirection: 'row',
-    marginVertical: spacing(3),
+    alignItems: 'center',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.line,
-    paddingTop: spacing(3),
-    alignSelf: 'stretch',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.line,
+    paddingVertical: spacing(3),
   },
-  stat: { flex: 1, alignItems: 'center', gap: 2 },
-  statValue: { fontSize: 16, fontWeight: '800', color: colors.oliveDeep, fontVariant: ['tabular-nums'] },
+  stat: { flex: 1, alignItems: 'center', gap: 3 },
+  statDivider: { width: StyleSheet.hairlineWidth, height: 24, backgroundColor: colors.line },
+  statValue: { fontFamily: fonts.display, fontSize: 19, color: colors.oliveDeep, letterSpacing: -0.4, fontVariant: ['tabular-nums'] },
+  streakValue: { flexDirection: 'row', alignItems: 'center', gap: 3 },
 });

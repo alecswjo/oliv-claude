@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MealCard } from '@/components/MealCard';
 import { UserRow } from '@/components/UserRow';
-import { EmptyState } from '@/components/ui';
+import { Button, EmptyState } from '@/components/ui';
 import { colors, radius, spacing } from '@/components/theme';
 import { dayKeyFromIso } from '@/domain/dates';
 import { computeStreak } from '@/domain/streaks';
@@ -95,7 +95,7 @@ export default function SocialScreen() {
         )}
         ListEmptyComponent={
           <EmptyState
-            emoji="🎉"
+            icon="check-circle"
             title="You follow everyone"
             body="You've followed every suggested eater. Their meals are waiting in your Following feed."
           />
@@ -133,14 +133,10 @@ export default function SocialScreen() {
       }}
       ListEmptyComponent={
         <EmptyState
-          emoji="👀"
+          icon="users"
           title="Nothing here yet"
           body="Follow a few people in Discover to fill this feed with what they're eating."
-          action={
-            <Pressable accessibilityRole="button" onPress={() => setTab('discover')}>
-              <Text style={{ color: colors.olive, fontWeight: '700', fontSize: 16 }}>Find people →</Text>
-            </Pressable>
-          }
+          action={<Button title="Find people" variant="secondary" icon="search" onPress={() => setTab('discover')} />}
         />
       }
     />

@@ -1,3 +1,11 @@
+import {
+  HankenGrotesk_400Regular,
+  HankenGrotesk_500Medium,
+  HankenGrotesk_600SemiBold,
+  HankenGrotesk_700Bold,
+} from '@expo-google-fonts/hanken-grotesk';
+import { SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
+import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -11,7 +19,15 @@ import { useAuthStore } from '@/store/authStore';
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
-  const [ready, setReady] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [fontsLoaded] = useFonts({
+    'Grove-Display': SpaceGrotesk_700Bold,
+    'Grove-DisplayMed': SpaceGrotesk_500Medium,
+    'Grove-Sans': HankenGrotesk_400Regular,
+    'Grove-SansMed': HankenGrotesk_500Medium,
+    'Grove-SansSemi': HankenGrotesk_600SemiBold,
+    'Grove-SansBold': HankenGrotesk_700Bold,
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -31,17 +47,20 @@ export default function RootLayout() {
         }
       }
 
-      if (mounted) {
-        setReady(true);
-        void SplashScreen.hideAsync().catch(() => {});
-      }
+      if (mounted) setHydrated(true);
     })();
     return () => {
       mounted = false;
     };
   }, []);
 
-  if (!ready) return null; // native splash stays up while stores hydrate
+  const ready = hydrated && fontsLoaded;
+
+  useEffect(() => {
+    if (ready) void SplashScreen.hideAsync().catch(() => {});
+  }, [ready]);
+
+  if (!ready) return null; // native splash holds while stores hydrate + fonts load
 
   return (
     <>
