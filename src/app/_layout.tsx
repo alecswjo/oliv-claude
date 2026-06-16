@@ -7,6 +7,7 @@ import {
 import { SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Updates from 'expo-updates';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
@@ -23,6 +24,33 @@ import { useAuthStore } from '@/store/authStore';
 import { showToast } from '@/store/toastStore';
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
+
+/**
+ * On cold start, check for an OTA update and — if one is ready — download and
+ * reload into it while the splash screen is still up, so updates apply on the
+ * FIRST launch instead of the next one. Bounded by timeouts and guarded for
+ * dev/offline so it can never strand the splash; reloadAsync() restarts the app
+ * and does not return.
+ */
+async function applyPendingUpdate(): Promise<void> {
+  if (__DEV__ || !Updates.isEnabled) return;
+  try {
+    const check = await Promise.race([
+      Updates.checkForUpdateAsync(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+    ]);
+    if (check && check.isAvailable) {
+      const fetched = await Promise.race([
+        Updates.fetchUpdateAsync().then(() => true),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 7000)),
+      ]);
+      if (fetched) await Updates.reloadAsync();
+    }
+  } catch {
+    // Offline or the check failed — boot the bundle we already have; the
+    // update (if any) will land on the next launch the old way.
+  }
+}
 
 // Deep links (oliv://meal/…) land on top of the tabs instead of dead-ending.
 export const unstable_settings = { initialRouteName: '(tabs)' };
@@ -56,6 +84,9 @@ export default function RootLayout() {
     let mounted = true;
     (async () => {
       try {
+        // First: apply any pending OTA update before we render anything.
+        await applyPendingUpdate();
+
         await hydrateAll();
 
         // Backend mode: resolve the session and, if signed in, load the user's
