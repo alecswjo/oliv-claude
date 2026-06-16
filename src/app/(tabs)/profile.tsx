@@ -44,17 +44,17 @@ export default function ProfileScreen() {
         <View style={styles.statRow}>
           <View style={styles.stat}>
             <Text style={styles.statValue}>{meals.length}</Text>
-            <Text style={type.micro}>Meals</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>Meals</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.stat}>
             <Text style={styles.statValue}>{counts.followers}</Text>
-            <Text style={type.micro}>Followers</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>Followers</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.stat}>
             <Text style={styles.statValue}>{counts.following}</Text>
-            <Text style={type.micro}>Following</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>Following</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.stat} accessibilityLabel={`${streak} day streak`}>
@@ -62,14 +62,14 @@ export default function ProfileScreen() {
               <Flame size={15} color={colors.ember} />
               <Text style={styles.statValue}>{streak}</Text>
             </View>
-            <Text style={type.micro}>Streak</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>Streak</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.stat}>
             <Text style={[styles.statValue, avgScore != null && { color: scoreColor(avgScore) }]}>
               {avgScore != null ? avgScore.toFixed(1) : '—'}
             </Text>
-            <Text style={type.micro}>Avg</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>Avg</Text>
           </View>
         </View>
 
@@ -114,5 +114,6 @@ const styles = StyleSheet.create({
   stat: { flex: 1, alignItems: 'center', gap: 3 },
   statDivider: { width: StyleSheet.hairlineWidth, height: 24, backgroundColor: colors.line },
   statValue: { fontFamily: fonts.display, fontSize: 19, color: colors.oliveDeep, letterSpacing: -0.4, fontVariant: ['tabular-nums'] },
+  statLabel: { fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 0.2, color: colors.ink50, textTransform: 'uppercase' },
   streakValue: { flexDirection: 'row', alignItems: 'center', gap: 3 },
 });
