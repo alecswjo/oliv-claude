@@ -4,12 +4,16 @@ import type { Comment, Meal, UserProfile } from '@/domain/types';
 import { buildSeedMeals } from '@/services/seed/seedMeals';
 import { buildSeedUsers, SEED_FOLLOWER_IDS } from '@/services/seed/seedUsers';
 import { loadJson } from '@/services/storage';
+import * as sync from '@/services/sync';
 import { createPersister } from './persist';
 import { useMealStore } from './mealStore';
 
 /**
- * Demo-user social graph — spec §F4. Seeded once at first run (stable IDs,
- * then persisted); interactions mutate the persisted copies directly.
+ * Social graph — spec §F4.
+ * - Offline: a seeded demo graph (stable IDs, persisted), mutated locally.
+ * - Backend: real users. `loadSocial` pulls the live feed + discover from
+ *   Supabase; follow/olive/comment mirror to the backend via `sync`. Demo data
+ *   is ignored when a backend is configured (the screens read the live fields).
  */
 
 const STORE_NAME = 'social';
@@ -26,22 +30,42 @@ interface PersistedSocial {
 
 interface SocialState extends PersistedSocial {
   hydrated: boolean;
+  /** Backend-only live data (not persisted; refetched on demand). */
+  feed: Meal[];
+  discover: UserProfile[];
+  searchResults: UserProfile[];
+  knownUsers: Record<string, UserProfile>;
 
   hydrate(): Promise<void>;
   /** No-op after first run. `anchor` is injectable for tests. */
   seedIfNeeded(anchor?: Date): void;
+  /** Backend: pull the live following set, feed, and discover suggestions. */
+  loadSocial(): Promise<void>;
+  searchUsers(query: string): Promise<void>;
+  clearSearch(): void;
   follow(userId: string): void;
   unfollow(userId: string): void;
   isFollowing(userId: string): boolean;
   block(userId: string): void;
   unblock(userId: string): void;
   isBlocked(userId: string): boolean;
-  /** Routes to demo meals or the user's own meals automatically. */
+  /** Routes to demo meals, the live feed, or the user's own meals automatically. */
   toggleOlive(mealId: string, byUserId: string): void;
   addComment(mealId: string, comment: Comment): void;
   /** Owner-moderation rules live in the caller (canDeleteComment below). */
   deleteComment(mealId: string, commentId: string): void;
   reset(): void;
+}
+
+/** Add/remove a user's olive on a meal. */
+function withOliveToggled(meal: Meal, userId: string): Meal {
+  const has = meal.oliveUserIds.includes(userId);
+  return {
+    ...meal,
+    oliveUserIds: has
+      ? meal.oliveUserIds.filter((id) => id !== userId)
+      : [...meal.oliveUserIds, userId],
+  };
 }
 
 export const useSocialStore = create<SocialState>()((set, get) => {
@@ -58,6 +82,15 @@ export const useSocialStore = create<SocialState>()((set, get) => {
     return true;
   };
 
+  // Live feed meals (backend others' posts) live outside the persisted demo set;
+  // mutate them in place for optimistic olive/comment UX (not persisted).
+  const mutateFeedMeal = (mealId: string, fn: (meal: Meal) => Meal): boolean => {
+    const { feed } = get();
+    if (!feed.some((meal) => meal.id === mealId)) return false;
+    set({ feed: feed.map((meal) => (meal.id === mealId ? fn(meal) : meal)) });
+    return true;
+  };
+
   return {
     seeded: false,
     demoUsers: [],
@@ -66,6 +99,10 @@ export const useSocialStore = create<SocialState>()((set, get) => {
     followerIds: [],
     blockedIds: [],
     hydrated: false,
+    feed: [],
+    discover: [],
+    searchResults: [],
+    knownUsers: {},
 
     async hydrate() {
       const saved = await loadJson<PersistedSocial>(STORE_NAME);
@@ -91,16 +128,64 @@ export const useSocialStore = create<SocialState>()((set, get) => {
       persist();
     },
 
+    async loadSocial() {
+      if (!sync.backendActive()) return;
+      const me = sync.currentUserId();
+      if (!me) return;
+      const repo = await import('@/services/supabase/repo');
+      try {
+        const followingIds = await repo.fetchFollowingIds(me);
+        const [feed, discover, followed] = await Promise.all([
+          repo.fetchFeed(followingIds),
+          repo.fetchDiscover([me, ...followingIds, ...get().blockedIds]),
+          repo.fetchProfilesByIds(followingIds),
+        ]);
+        const knownUsers = { ...get().knownUsers };
+        for (const user of [...discover, ...followed]) knownUsers[user.id] = user;
+        set({ followingIds, feed, discover, knownUsers });
+        persist();
+      } catch {
+        // Best-effort: a failed refresh keeps the last-known state (offline-first).
+      }
+    },
+
+    async searchUsers(query) {
+      if (!sync.backendActive()) return;
+      const me = sync.currentUserId();
+      if (!me) return;
+      const repo = await import('@/services/supabase/repo');
+      try {
+        const results = await repo.searchProfiles(query, me);
+        const knownUsers = { ...get().knownUsers };
+        for (const user of results) knownUsers[user.id] = user;
+        set({ searchResults: results, knownUsers });
+      } catch {
+        set({ searchResults: [] });
+      }
+    },
+
+    clearSearch() {
+      set({ searchResults: [] });
+    },
+
     follow(userId) {
       const { followingIds } = get();
       if (followingIds.includes(userId)) return;
       set({ followingIds: [...followingIds, userId] });
       persist();
+      if (sync.backendActive()) {
+        sync.pushFollow(userId, true);
+        void sync.flushSync().then(() => get().loadSocial());
+      }
     },
 
     unfollow(userId) {
       set({ followingIds: get().followingIds.filter((id) => id !== userId) });
       persist();
+      if (sync.backendActive()) {
+        sync.pushFollow(userId, false);
+        void sync.flushSync().then(() => get().loadSocial());
+      }
     },
 
     isFollowing(userId) {
@@ -128,32 +213,38 @@ export const useSocialStore = create<SocialState>()((set, get) => {
     },
 
     toggleOlive(mealId, byUserId) {
-      const handled = mutateDemoMeal(mealId, (meal) => {
-        const has = meal.oliveUserIds.includes(byUserId);
-        return {
-          ...meal,
-          oliveUserIds: has
-            ? meal.oliveUserIds.filter((id) => id !== byUserId)
-            : [...meal.oliveUserIds, byUserId],
-        };
-      });
-      if (!handled) useMealStore.getState().toggleOlive(mealId, byUserId);
+      if (mutateDemoMeal(mealId, (meal) => withOliveToggled(meal, byUserId))) return;
+      // Live feed meal (someone else's post on the backend): optimistic + mirror.
+      const fed = get().feed.find((meal) => meal.id === mealId);
+      if (fed) {
+        const nowActive = !fed.oliveUserIds.includes(byUserId);
+        mutateFeedMeal(mealId, (meal) => withOliveToggled(meal, byUserId));
+        sync.pushOlive(mealId, byUserId, nowActive);
+        return;
+      }
+      useMealStore.getState().toggleOlive(mealId, byUserId);
     },
 
     addComment(mealId, comment) {
-      const handled = mutateDemoMeal(mealId, (meal) => ({
-        ...meal,
-        comments: [...meal.comments, comment],
-      }));
-      if (!handled) useMealStore.getState().addComment(mealId, comment);
+      if (mutateDemoMeal(mealId, (meal) => ({ ...meal, comments: [...meal.comments, comment] }))) return;
+      if (mutateFeedMeal(mealId, (meal) => ({ ...meal, comments: [...meal.comments, comment] }))) {
+        sync.pushComment(mealId, comment);
+        return;
+      }
+      useMealStore.getState().addComment(mealId, comment);
     },
 
     deleteComment(mealId, commentId) {
-      const handled = mutateDemoMeal(mealId, (meal) => ({
+      const remove = (meal: Meal): Meal => ({
         ...meal,
         comments: meal.comments.filter((c) => c.id !== commentId),
-      }));
-      if (!handled) useMealStore.getState().deleteComment(mealId, commentId);
+      });
+      if (mutateDemoMeal(mealId, remove)) return;
+      if (mutateFeedMeal(mealId, remove)) {
+        sync.pushCommentDelete(commentId);
+        return;
+      }
+      useMealStore.getState().deleteComment(mealId, commentId);
     },
 
     reset() {
@@ -165,6 +256,10 @@ export const useSocialStore = create<SocialState>()((set, get) => {
         followerIds: [],
         blockedIds: [],
         hydrated: true,
+        feed: [],
+        discover: [],
+        searchResults: [],
+        knownUsers: {},
       });
       persist();
     },

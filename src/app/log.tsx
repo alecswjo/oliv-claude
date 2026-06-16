@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { HealthScoreBadge } from '@/components/HealthScoreBadge';
 import { Icon } from '@/components/Icon';
 import { useSafeBack } from '@/components/navigation';
@@ -291,7 +291,11 @@ export default function LogMealScreen() {
   /* ----------------------------- compose phase ----------------------------- */
   if (!reviewing) {
     return (
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets>
         {/* --- photos --- */}
         <View style={{ gap: spacing(2.5) }}>
           <Text style={type.micro}>Photos</Text>
@@ -415,11 +419,11 @@ export default function LogMealScreen() {
 
   /* ----------------------------- review phase ----------------------------- */
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}>
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets>
       {outcome?.fallbackNotice ? (
         <Card style={styles.noticeCard}>
           <Text style={type.small}>{outcome.fallbackNotice}</Text>
@@ -536,7 +540,6 @@ export default function LogMealScreen() {
         }}
       />
     </ScrollView>
-    </KeyboardAvoidingView>
   );
 }
 

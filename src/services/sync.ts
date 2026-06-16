@@ -57,6 +57,7 @@ type PendingOp =
   | { kind: 'olive'; mealId: string; userId: string; on: boolean }
   | { kind: 'comment'; mealId: string; comment: Comment }
   | { kind: 'commentDelete'; commentId: string }
+  | { kind: 'follow'; followerId: string; followingId: string; on: boolean }
   | { kind: 'profile'; profile: UserProfile };
 
 type QueuedOp = PendingOp & { attempts: number };
@@ -109,6 +110,10 @@ async function execute(op: PendingOp): Promise<void> {
       return uploadMealPhotos(op.meal);
     case 'olive':
       return repo.setOlive(op.mealId, op.userId, op.on);
+    case 'follow':
+      return op.on
+        ? repo.follow(op.followerId, op.followingId)
+        : repo.unfollow(op.followerId, op.followingId);
     case 'comment':
       return repo.insertComment(op.mealId, op.comment);
     case 'commentDelete':
@@ -238,6 +243,12 @@ export function pushMealDelete(meal: Meal): void {
 
 export function pushOlive(mealId: string, userId: string, on: boolean): void {
   run({ kind: 'olive', mealId, userId, on });
+}
+
+export function pushFollow(followingId: string, on: boolean): void {
+  const followerId = currentUserId();
+  if (!followerId) return;
+  run({ kind: 'follow', followerId, followingId, on });
 }
 
 export function pushComment(mealId: string, comment: Comment): void {

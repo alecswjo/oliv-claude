@@ -1,55 +1,100 @@
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { MealCard } from '@/components/MealCard';
 import { UserRow } from '@/components/UserRow';
 import { Button, EmptyState } from '@/components/ui';
-import { colors, radius, spacing, type } from '@/components/theme';
+import { colors, fonts, radius, spacing } from '@/components/theme';
 import { isBackendConfigured } from '@/config';
 import { dayKeyFromIso } from '@/domain/dates';
 import { computeStreak } from '@/domain/streaks';
 import { averageScore } from '@/domain/summaries';
-import type { Meal } from '@/domain/types';
+import type { Meal, UserProfile } from '@/domain/types';
 import { useMealStore } from '@/store/mealStore';
 import { selectDiscoverUsers, selectSocialFeed, useSocialStore } from '@/store/socialStore';
 import { useUserStore } from '@/store/userStore';
 
 const PAGE_SIZE = 20;
+const BACKEND = isBackendConfigured();
 
 /** Social tab — feed of followed users + discover (spec §F4). */
 export default function SocialScreen() {
   const router = useRouter();
   const [tab, setTab] = useState<'feed' | 'discover'>('feed');
   const [pages, setPages] = useState(1);
+  const [query, setQuery] = useState('');
 
   const profile = useUserStore((state) => state.profile);
   const ownMeals = useMealStore((state) => state.meals);
-  const demoMeals = useSocialStore((state) => state.demoMeals);
-  const demoUsers = useSocialStore((state) => state.demoUsers);
-  const followingIds = useSocialStore((state) => state.followingIds);
-  const follow = useSocialStore((state) => state.follow);
-  const unfollow = useSocialStore((state) => state.unfollow);
-  const toggleOlive = useSocialStore((state) => state.toggleOlive);
-  const blockedIds = useSocialStore((state) => state.blockedIds);
+  const demoMeals = useSocialStore((s) => s.demoMeals);
+  const demoUsers = useSocialStore((s) => s.demoUsers);
+  const followingIds = useSocialStore((s) => s.followingIds);
+  const blockedIds = useSocialStore((s) => s.blockedIds);
+  const follow = useSocialStore((s) => s.follow);
+  const unfollow = useSocialStore((s) => s.unfollow);
+  const toggleOlive = useSocialStore((s) => s.toggleOlive);
+  // backend-only live data
+  const liveFeed = useSocialStore((s) => s.feed);
+  const liveDiscover = useSocialStore((s) => s.discover);
+  const searchResults = useSocialStore((s) => s.searchResults);
+  const knownUsers = useSocialStore((s) => s.knownUsers);
+  const loadSocial = useSocialStore((s) => s.loadSocial);
+  const searchUsers = useSocialStore((s) => s.searchUsers);
+  const clearSearch = useSocialStore((s) => s.clearSearch);
+
+  // Pull the live graph whenever the tab is shown.
+  useEffect(() => {
+    if (BACKEND) void loadSocial();
+  }, [loadSocial]);
+
+  // Debounced user search.
+  useEffect(() => {
+    if (!BACKEND) return;
+    const q = query.trim();
+    if (!q) {
+      clearSearch();
+      return;
+    }
+    const handle = setTimeout(() => void searchUsers(q), 300);
+    return () => clearTimeout(handle);
+  }, [query, searchUsers, clearSearch]);
 
   const feed = useMemo(
-    () => selectSocialFeed({ demoMeals, ownMeals, followingIds, meId: profile?.id, blockedIds }),
-    [demoMeals, ownMeals, followingIds, profile?.id, blockedIds],
+    () =>
+      selectSocialFeed({
+        demoMeals: BACKEND ? liveFeed : demoMeals,
+        ownMeals,
+        followingIds,
+        meId: profile?.id,
+        blockedIds,
+      }),
+    [liveFeed, demoMeals, ownMeals, followingIds, profile?.id, blockedIds],
   );
   const visibleFeed = feed.slice(0, pages * PAGE_SIZE);
 
-  const discover = useMemo(
-    () => selectDiscoverUsers(demoUsers, followingIds, blockedIds),
-    [demoUsers, followingIds, blockedIds],
-  );
+  const searching = BACKEND && query.trim().length > 0;
+  const discover = useMemo(() => {
+    if (BACKEND) {
+      return searching
+        ? searchResults.filter((u) => u.id !== profile?.id && !blockedIds.includes(u.id))
+        : selectDiscoverUsers(liveDiscover, followingIds, blockedIds);
+    }
+    return selectDiscoverUsers(demoUsers, followingIds, blockedIds);
+  }, [searching, searchResults, liveDiscover, demoUsers, followingIds, blockedIds, profile?.id]);
 
   const userById = useMemo(() => {
-    const map = new Map(demoUsers.map((user) => [user.id, user]));
+    const map = new Map<string, UserProfile>();
+    if (BACKEND) {
+      for (const id of Object.keys(knownUsers)) map.set(id, knownUsers[id]);
+    } else {
+      for (const user of demoUsers) map.set(user.id, user);
+    }
     if (profile) map.set(profile.id, profile);
     return map;
-  }, [demoUsers, profile]);
+  }, [knownUsers, demoUsers, profile]);
 
   const statsFor = (userId: string) => {
+    if (BACKEND) return undefined; // real users' stats aren't cached locally
     const theirMeals = demoMeals.filter((meal) => meal.userId === userId);
     return {
       streak: computeStreak(theirMeals.map((meal) => dayKeyFromIso(meal.loggedAt)), new Date()),
@@ -58,13 +103,6 @@ export default function SocialScreen() {
   };
 
   if (!profile) return null;
-
-  const demoNote = isBackendConfigured() ? (
-    <Text style={styles.demoNote}>
-      The eaters below are sample Oliv accounts so you can try the social features — finding real
-      friends is coming soon.
-    </Text>
-  ) : null;
 
   const Toggle = (
     <View style={styles.toggleRow}>
@@ -88,31 +126,61 @@ export default function SocialScreen() {
       <FlatList
         style={styles.list}
         contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <>
             {Toggle}
-            {demoNote}
+            {BACKEND ? (
+              <TextInput
+                style={styles.search}
+                placeholder="Search by name or @username"
+                placeholderTextColor={colors.ink30}
+                value={query}
+                onChangeText={setQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+                accessibilityLabel="Search people"
+              />
+            ) : null}
           </>
         }
         data={discover}
         keyExtractor={(user) => user.id}
-        renderItem={({ item }) => (
-          <View style={{ marginBottom: spacing(3) }}>
-            <UserRow
-              user={item}
-              stats={statsFor(item.id)}
-              following={false}
-              onPress={() => router.push(`/user/${item.id}`)}
-              onToggleFollow={() => follow(item.id)}
-            />
-          </View>
-        )}
+        renderItem={({ item }) => {
+          const following = followingIds.includes(item.id);
+          return (
+            <View style={{ marginBottom: spacing(3) }}>
+              <UserRow
+                user={item}
+                stats={statsFor(item.id)}
+                following={following}
+                onPress={() => router.push(`/user/${item.id}`)}
+                onToggleFollow={() => (following ? unfollow(item.id) : follow(item.id))}
+              />
+            </View>
+          );
+        }}
         ListEmptyComponent={
-          <EmptyState
-            icon="check-circle"
-            title="You follow everyone"
-            body="You've followed every suggested eater. Their meals are waiting in your Following feed."
-          />
+          searching ? (
+            <EmptyState
+              icon="search"
+              title="No one found"
+              body={`No users match "${query.trim()}". Try a different name or @username.`}
+            />
+          ) : BACKEND ? (
+            <EmptyState
+              icon="users"
+              title="No one to discover yet"
+              body="As more people join Oliv they'll show up here. Search above to find a friend by username."
+            />
+          ) : (
+            <EmptyState
+              icon="check-circle"
+              title="You follow everyone"
+              body="You've followed every suggested eater. Their meals are waiting in your Following feed."
+            />
+          )
         }
       />
     );
@@ -176,5 +244,16 @@ const styles = StyleSheet.create({
   toggleActive: { backgroundColor: colors.white },
   toggleText: { fontSize: 14, fontWeight: '600', color: colors.slate },
   toggleTextActive: { color: colors.oliveDeep },
-  demoNote: { ...type.tiny, marginBottom: spacing(3), textAlign: 'center' as const },
+  search: {
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.line,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing(3.5),
+    paddingVertical: spacing(3),
+    fontFamily: fonts.sansMed,
+    fontSize: 16,
+    color: colors.ink,
+    marginBottom: spacing(4),
+  },
 });

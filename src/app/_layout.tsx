@@ -16,6 +16,7 @@ import { Icon } from '@/components/Icon';
 import { useSafeBack } from '@/components/navigation';
 import { colors } from '@/components/theme';
 import { ToastHost } from '@/components/ToastHost';
+import { KeyboardDoneBar } from '@/components/ui';
 import { onSaveError } from '@/services/storage';
 import { hydrateAll } from '@/store/appStore';
 import { useAuthStore } from '@/store/authStore';
@@ -116,6 +117,7 @@ export default function RootLayout() {
         <Stack.Screen name="legal/terms" options={{ title: 'Terms of Use' }} />
       </Stack>
       <ToastHost />
+      <KeyboardDoneBar />
     </>
   );
 }

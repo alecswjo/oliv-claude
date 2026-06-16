@@ -2,6 +2,9 @@ import React, { useRef } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  InputAccessoryView,
+  Keyboard,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -87,8 +90,11 @@ export function Button({ title, variant = 'primary', loading, disabled, icon, st
 
 /* -------------------------------- field -------------------------------- */
 
+/** nativeID linking the keyboard "Done" bar to every text field on iOS. */
+export const KEYBOARD_DONE_ID = 'oliv-kb-done';
+
 export function Field(props: TextInputProps & { label?: string }) {
-  const { label, style, ...rest } = props;
+  const { label, style, inputAccessoryViewID, ...rest } = props;
   return (
     <View style={{ gap: spacing(1.5) }}>
       {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
@@ -96,9 +102,30 @@ export function Field(props: TextInputProps & { label?: string }) {
         placeholderTextColor={colors.ink30}
         style={[styles.field, style]}
         accessibilityLabel={label ?? rest.placeholder}
+        // Give numeric/multiline keyboards (which lack a return key) a way out.
+        inputAccessoryViewID={inputAccessoryViewID ?? (Platform.OS === 'ios' ? KEYBOARD_DONE_ID : undefined)}
         {...rest}
       />
     </View>
+  );
+}
+
+/** The "Done" bar shown above the iOS keyboard. Mount once near the app root. */
+export function KeyboardDoneBar() {
+  if (Platform.OS !== 'ios') return null;
+  return (
+    <InputAccessoryView nativeID={KEYBOARD_DONE_ID}>
+      <View style={styles.kbBar}>
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss keyboard"
+          hitSlop={8}
+          onPress={() => Keyboard.dismiss()}
+          style={styles.kbDone}>
+          <Text style={styles.kbDoneText}>Done</Text>
+        </PressableScale>
+      </View>
+    </InputAccessoryView>
   );
 }
 
@@ -236,6 +263,16 @@ const styles = StyleSheet.create({
   },
   buttonInner: { flexDirection: 'row', alignItems: 'center', gap: spacing(2) },
   buttonText: { fontFamily: fonts.sansBold, fontSize: 16, letterSpacing: -0.1 },
+  kbBar: {
+    backgroundColor: colors.fill,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.line,
+    alignItems: 'flex-end',
+    paddingHorizontal: spacing(4),
+    paddingVertical: spacing(2),
+  },
+  kbDone: { paddingHorizontal: spacing(2), paddingVertical: spacing(1) },
+  kbDoneText: { fontFamily: fonts.sansBold, fontSize: 16, color: colors.olive },
   fieldLabel: { ...type.label },
   field: {
     backgroundColor: colors.surface,

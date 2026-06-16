@@ -1,18 +1,22 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useMemo } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 import { Flame } from '@/components/Icon';
 import { MealCard } from '@/components/MealCard';
 import { useSafeBack } from '@/components/navigation';
 import { UserAvatar } from '@/components/UserAvatar';
 import { Button, Card, EmptyState } from '@/components/ui';
 import { colors, fonts, scoreColor, spacing, type } from '@/components/theme';
+import { isBackendConfigured } from '@/config';
 import { dayKeyFromIso } from '@/domain/dates';
 import { computeStreak } from '@/domain/streaks';
 import { averageScore } from '@/domain/summaries';
+import type { Meal, UserProfile } from '@/domain/types';
 import { blockUser, reportContent, unblockUser } from '@/services/safety';
 import { followCountsFor, useSocialStore } from '@/store/socialStore';
 import { useUserStore } from '@/store/userStore';
+
+const BACKEND = isBackendConfigured();
 
 /** Other-user profile — spec §F4.6. */
 export default function UserProfileScreen() {
@@ -23,6 +27,7 @@ export default function UserProfileScreen() {
   const profile = useUserStore((state) => state.profile);
   const demoUsers = useSocialStore((state) => state.demoUsers);
   const demoMeals = useSocialStore((state) => state.demoMeals);
+  const knownUsers = useSocialStore((state) => state.knownUsers);
   const followingIds = useSocialStore((state) => state.followingIds);
   const followerIds = useSocialStore((state) => state.followerIds);
   const follow = useSocialStore((state) => state.follow);
@@ -30,19 +35,56 @@ export default function UserProfileScreen() {
   const toggleOlive = useSocialStore((state) => state.toggleOlive);
   const blockedIds = useSocialStore((state) => state.blockedIds);
 
-  const user = demoUsers.find((candidate) => candidate.id === id);
+  const [remoteUser, setRemoteUser] = useState<UserProfile | null>(null);
+  const [remoteMeals, setRemoteMeals] = useState<Meal[]>([]);
+  const [remoteStats, setRemoteStats] = useState<{ followers: number; following: number; avgScore: number | null } | null>(null);
+  const [loading, setLoading] = useState(BACKEND);
 
-  const theirMeals = useMemo(
-    () =>
-      blockedIds.includes(id ?? '')
-        ? []
-        : demoMeals
-            .filter((meal) => meal.userId === id && !meal.isPrivate)
-            .sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime()),
-    [demoMeals, id, blockedIds],
-  );
+  useEffect(() => {
+    if (!BACKEND || !id) return;
+    let active = true;
+    setLoading(true);
+    void (async () => {
+      const repo = await import('@/services/supabase/repo');
+      try {
+        const [u, meals, stats] = await Promise.all([
+          repo.fetchPublicProfile(id),
+          repo.fetchPublicMeals(id),
+          repo.fetchStats(id),
+        ]);
+        if (!active) return;
+        setRemoteUser(u);
+        setRemoteMeals(meals);
+        setRemoteStats({ followers: stats.followers, following: stats.following, avgScore: stats.avgScore });
+      } catch {
+        // leave nulls → not-found / empty state
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  const user = BACKEND
+    ? remoteUser ?? (id ? knownUsers[id] : undefined)
+    : demoUsers.find((candidate) => candidate.id === id);
+
+  const theirMeals = useMemo(() => {
+    if (blockedIds.includes(id ?? '')) return [];
+    const source = BACKEND ? remoteMeals : demoMeals.filter((meal) => meal.userId === id && !meal.isPrivate);
+    return [...source].sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime());
+  }, [remoteMeals, demoMeals, id, blockedIds]);
 
   if (!user || !profile) {
+    if (BACKEND && loading) {
+      return (
+        <View style={styles.missing}>
+          <ActivityIndicator color={colors.olive} />
+        </View>
+      );
+    }
     return (
       <View style={styles.missing}>
         <Text style={type.heading}>User not found</Text>
@@ -53,9 +95,12 @@ export default function UserProfileScreen() {
 
   const following = followingIds.includes(user.id);
   const blocked = blockedIds.includes(user.id);
-  const counts = followCountsFor(user, { followingIds, followerIds });
+  const counts =
+    BACKEND && remoteStats
+      ? { followers: remoteStats.followers, following: remoteStats.following }
+      : followCountsFor(user, { followingIds, followerIds });
   const streak = computeStreak(theirMeals.map((meal) => dayKeyFromIso(meal.loggedAt)), new Date());
-  const avgScore = averageScore(theirMeals);
+  const avgScore = BACKEND && remoteStats ? remoteStats.avgScore : averageScore(theirMeals);
 
   return (
     <>
