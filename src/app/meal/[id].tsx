@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { CommentList } from '@/components/CommentList';
@@ -28,6 +28,7 @@ import { useUserStore } from '@/store/userStore';
 export default function MealDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const goBack = useSafeBack();
+  const router = useRouter();
 
   const profile = useUserStore((state) => state.profile);
   const ownMeals = useMealStore((state) => state.meals);
@@ -147,25 +148,45 @@ export default function MealDetailScreen() {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 96 : 0}>
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Card style={{ gap: spacing(3) }}>
-        <View style={styles.authorRow}>
-          <UserAvatar
-            emoji={author?.avatarEmoji ?? '🙂'}
-            color={author?.avatarColor ?? colors.olive}
-            size={36}
-          />
-          <View style={{ flex: 1 }}>
-            <Text style={type.bodyBold}>
-              {author?.displayName ?? 'Someone'}
-              {isOwn ? <Text style={{ color: colors.olive }}> · You</Text> : null}
-            </Text>
-            <View style={styles.metaRow}>
-              <Text style={type.tiny}>
-                {MEAL_TYPE_LABELS[meal.mealType]} · {timeLabel(meal.loggedAt)}
+        {!isOwn && author ? (
+          <PressableScale
+            accessibilityRole="button"
+            accessibilityLabel={`View ${author.displayName}'s profile`}
+            onPress={() => router.push(`/user/${meal.userId}`)}
+            style={styles.authorRow}>
+            <UserAvatar emoji={author.avatarEmoji} color={author.avatarColor} size={36} />
+            <View style={{ flex: 1 }}>
+              <Text style={type.bodyBold}>{author.displayName}</Text>
+              <View style={styles.metaRow}>
+                <Text style={type.tiny}>
+                  {MEAL_TYPE_LABELS[meal.mealType]} · {timeLabel(meal.loggedAt)}
+                </Text>
+                {meal.isPrivate ? <Icon name="lock" size={12} color={colors.ink30} accessibilityLabel="Private" /> : null}
+              </View>
+            </View>
+            <Icon name="chevron-right" size={18} color={colors.ink30} />
+          </PressableScale>
+        ) : (
+          <View style={styles.authorRow}>
+            <UserAvatar
+              emoji={author?.avatarEmoji ?? '🙂'}
+              color={author?.avatarColor ?? colors.olive}
+              size={36}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={type.bodyBold}>
+                {author?.displayName ?? 'Someone'}
+                {isOwn ? <Text style={{ color: colors.olive }}> · You</Text> : null}
               </Text>
-              {meal.isPrivate ? <Icon name="lock" size={12} color={colors.ink30} accessibilityLabel="Private" /> : null}
+              <View style={styles.metaRow}>
+                <Text style={type.tiny}>
+                  {MEAL_TYPE_LABELS[meal.mealType]} · {timeLabel(meal.loggedAt)}
+                </Text>
+                {meal.isPrivate ? <Icon name="lock" size={12} color={colors.ink30} accessibilityLabel="Private" /> : null}
+              </View>
             </View>
           </View>
-        </View>
+        )}
 
         {meal.photoUris?.length ? (
           meal.photoUris.length === 1 ? (

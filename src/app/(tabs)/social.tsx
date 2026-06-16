@@ -12,6 +12,7 @@ import { averageScore } from '@/domain/summaries';
 import type { Meal, UserProfile } from '@/domain/types';
 import { useMealStore } from '@/store/mealStore';
 import { selectDiscoverUsers, selectSocialFeed, useSocialStore } from '@/store/socialStore';
+import { showToast } from '@/store/toastStore';
 import { useUserStore } from '@/store/userStore';
 
 const PAGE_SIZE = 20;
@@ -75,12 +76,23 @@ export default function SocialScreen() {
   const searching = BACKEND && query.trim().length > 0;
   const discover = useMemo(() => {
     if (BACKEND) {
-      return searching
-        ? searchResults.filter((u) => u.id !== profile?.id && !blockedIds.includes(u.id))
-        : selectDiscoverUsers(liveDiscover, followingIds, blockedIds);
+      // Don't drop a just-followed user from the list mid-tap — the button
+      // flips to "Following" in place; loadSocial() drops them on next refresh.
+      const source = searching ? searchResults : liveDiscover;
+      return source.filter((u) => u.id !== profile?.id && !blockedIds.includes(u.id));
     }
     return selectDiscoverUsers(demoUsers, followingIds, blockedIds);
   }, [searching, searchResults, liveDiscover, demoUsers, followingIds, blockedIds, profile?.id]);
+
+  const toggleFollow = (user: UserProfile) => {
+    if (followingIds.includes(user.id)) {
+      unfollow(user.id);
+      showToast(`Unfollowed ${user.displayName}`);
+    } else {
+      follow(user.id);
+      showToast(`Following ${user.displayName}`);
+    }
+  };
 
   const userById = useMemo(() => {
     const map = new Map<string, UserProfile>();
@@ -156,7 +168,7 @@ export default function SocialScreen() {
                 stats={statsFor(item.id)}
                 following={following}
                 onPress={() => router.push(`/user/${item.id}`)}
-                onToggleFollow={() => (following ? unfollow(item.id) : follow(item.id))}
+                onToggleFollow={() => toggleFollow(item)}
               />
             </View>
           );
@@ -208,6 +220,9 @@ export default function SocialScreen() {
               isOwn={item.userId === profile.id}
               oliveActive={item.oliveUserIds.includes(profile.id)}
               onPress={() => router.push(`/meal/${item.id}`)}
+              onAuthorPress={
+                item.userId === profile.id ? undefined : () => router.push(`/user/${item.userId}`)
+              }
               onToggleOlive={() => toggleOlive(item.id, profile.id)}
             />
           </View>
