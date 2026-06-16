@@ -33,6 +33,8 @@ export default function MealDetailScreen() {
   const ownMeals = useMealStore((state) => state.meals);
   const demoMeals = useSocialStore((state) => state.demoMeals);
   const demoUsers = useSocialStore((state) => state.demoUsers);
+  const feedMeals = useSocialStore((state) => state.feed);
+  const knownUsers = useSocialStore((state) => state.knownUsers);
   const updateMeal = useMealStore((state) => state.updateMeal);
   const deleteMeal = useMealStore((state) => state.deleteMeal);
   const toggleOlive = useSocialStore((state) => state.toggleOlive);
@@ -41,10 +43,13 @@ export default function MealDetailScreen() {
 
   const meal: Meal | undefined =
     ownMeals.find((candidate) => candidate.id === id) ??
+    feedMeals.find((candidate) => candidate.id === id) ??
     demoMeals.find((candidate) => candidate.id === id);
 
   const isOwn = Boolean(meal && profile && meal.userId === profile.id);
-  const author = isOwn ? profile : demoUsers.find((user) => user.id === meal?.userId);
+  const author = isOwn
+    ? profile
+    : (meal ? knownUsers[meal.userId] : undefined) ?? demoUsers.find((user) => user.id === meal?.userId);
   const oliveActive = Boolean(meal && profile && meal.oliveUserIds.includes(profile.id));
 
   const [editing, setEditing] = useState(false);
@@ -54,10 +59,11 @@ export default function MealDetailScreen() {
   const [fatG, setFatG] = useState('');
 
   const resolveUser = useMemo(() => {
-    const map = new Map(demoUsers.map((user) => [user.id, user]));
+    const map = new Map<string, typeof profile>(demoUsers.map((user) => [user.id, user]));
+    for (const known of Object.values(knownUsers)) map.set(known.id, known);
     if (profile) map.set(profile.id, profile);
-    return (userId: string) => map.get(userId);
-  }, [demoUsers, profile]);
+    return (userId: string) => map.get(userId) ?? undefined;
+  }, [demoUsers, knownUsers, profile]);
 
   if (!meal || !profile) {
     return (

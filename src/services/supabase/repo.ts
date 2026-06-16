@@ -218,14 +218,43 @@ export async function fetchStats(profileId: string): Promise<ProfileStats> {
   };
 }
 
-/** Suggested users to follow: public profiles excluding self + already-followed. */
+/** Suggested users to follow: recent joiners, excluding self + already-followed. */
 export async function fetchDiscover(excludeIds: string[], limit = 25): Promise<UserProfile[]> {
-  let query = client().from('public_profiles').select('*').limit(limit);
+  let query = client()
+    .from('public_profiles')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit);
   if (excludeIds.length > 0) {
     // Quote each id — unquoted values would corrupt the PostgREST filter list.
     query = query.not('id', 'in', `(${excludeIds.map((id) => `"${id}"`).join(',')})`);
   }
   const { data, error } = await query;
+  if (error) throw error;
+  return (data as PublicProfileRow[]).map(rowToPublicProfile);
+}
+
+/** Search users by username or display name (case-insensitive substring). */
+export async function searchProfiles(query: string, excludeId: string, limit = 25): Promise<UserProfile[]> {
+  // Strip PostgREST/ilike metacharacters so the user can't corrupt the filter.
+  const q = query.trim().replace(/[%*,()\\]/g, '');
+  if (!q) return [];
+  const pattern = `*${q}*`;
+  const { data, error } = await client()
+    .from('public_profiles')
+    .select('*')
+    .or(`username.ilike.${pattern},display_name.ilike.${pattern}`)
+    .neq('id', excludeId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data as PublicProfileRow[]).map(rowToPublicProfile);
+}
+
+/** Fetch several public profiles by id (author resolution for the feed). */
+export async function fetchProfilesByIds(ids: string[]): Promise<UserProfile[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await client().from('public_profiles').select('*').in('id', ids);
   if (error) throw error;
   return (data as PublicProfileRow[]).map(rowToPublicProfile);
 }
