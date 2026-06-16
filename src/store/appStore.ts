@@ -26,7 +26,7 @@ export const useAppStore = create<AppState>()((set, get) => {
   const persist = createPersister<PersistedApp>(STORE_NAME, () => ({ units: get().units }));
 
   return {
-    units: 'metric',
+    units: 'imperial', // US-first default (lb/ft); users can switch in Settings
     hydrated: false,
 
     setUnits(units) {
