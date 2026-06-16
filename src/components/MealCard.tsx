@@ -40,6 +40,7 @@ export function MealCard({
   author,
   isOwn,
   onPress,
+  onAuthorPress,
   onToggleOlive,
   oliveActive,
   showAuthor = false,
@@ -48,11 +49,27 @@ export function MealCard({
   author?: UserProfile | null;
   isOwn: boolean;
   onPress?: () => void;
+  onAuthorPress?: () => void;
   onToggleOlive?: () => void;
   oliveActive: boolean;
   showAuthor?: boolean;
 }) {
   const title = mealTitle(meal.foodItems, meal.description);
+
+  const authorBlock = author ? (
+    <>
+      <UserAvatar emoji={author.avatarEmoji} color={author.avatarColor} size={36} />
+      <View style={{ flex: 1 }}>
+        <Text style={type.bodyBold} numberOfLines={1}>
+          {author.displayName}
+          {isOwn ? <Text style={{ color: colors.olive }}>  · You</Text> : null}
+        </Text>
+        <Text style={type.tiny}>
+          {MEAL_TYPE_LABELS[meal.mealType]} · {timeLabel(meal.loggedAt)}
+        </Text>
+      </View>
+    </>
+  ) : null;
 
   return (
     <PressableScale
@@ -63,18 +80,18 @@ export function MealCard({
       {/* author / meta row */}
       <View style={styles.headerRow}>
         {showAuthor && author ? (
-          <>
-            <UserAvatar emoji={author.avatarEmoji} color={author.avatarColor} size={36} />
-            <View style={{ flex: 1 }}>
-              <Text style={type.bodyBold} numberOfLines={1}>
-                {author.displayName}
-                {isOwn ? <Text style={{ color: colors.olive }}>  · You</Text> : null}
-              </Text>
-              <Text style={type.tiny}>
-                {MEAL_TYPE_LABELS[meal.mealType]} · {timeLabel(meal.loggedAt)}
-              </Text>
-            </View>
-          </>
+          onAuthorPress ? (
+            <PressableScale
+              accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
+              accessibilityLabel={`View ${author.displayName}'s profile`}
+              hitSlop={6}
+              onPress={onAuthorPress}
+              style={styles.authorTap}>
+              {authorBlock}
+            </PressableScale>
+          ) : (
+            <View style={styles.authorTap}>{authorBlock}</View>
+          )
         ) : (
           <View style={{ flex: 1 }}>
             <Text style={type.smallBold}>
@@ -142,6 +159,7 @@ const styles = StyleSheet.create({
     ...elevation.card,
   },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(2.5) },
+  authorTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing(2.5) },
   photo: { width: '100%', aspectRatio: 16 / 10, borderRadius: radius.md, backgroundColor: colors.oliveSoft },
   photoCountBadge: {
     position: 'absolute',

@@ -170,6 +170,16 @@ export async function fetchFollowingIds(userId: string): Promise<string[]> {
   return (data as { following_id: string }[]).map((r) => r.following_id);
 }
 
+/** Ids of everyone who follows `userId`. */
+export async function fetchFollowerIds(userId: string): Promise<string[]> {
+  const { data, error } = await client()
+    .from('follows')
+    .select('follower_id')
+    .eq('following_id', userId);
+  if (error) throw error;
+  return (data as { follower_id: string }[]).map((r) => r.follower_id);
+}
+
 /** Public meals from the given authors, newest first (the social feed source). */
 export async function fetchFeed(authorIds: string[], limit = 100): Promise<Meal[]> {
   if (authorIds.length === 0) return [];

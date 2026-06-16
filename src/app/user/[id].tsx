@@ -1,6 +1,6 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Flame } from '@/components/Icon';
 import { MealCard } from '@/components/MealCard';
 import { useSafeBack } from '@/components/navigation';
@@ -122,29 +122,37 @@ export default function UserProfileScreen() {
             {user.bio ? <Text style={[type.body, styles.bio]}>{user.bio}</Text> : null}
 
             <View style={styles.statRow}>
-              <View style={styles.stat}>
+              <Pressable
+                style={styles.stat}
+                accessibilityRole="button"
+                accessibilityLabel={`${counts.followers} followers`}
+                onPress={() => router.push(`/connections?userId=${user.id}&type=followers`)}>
                 <Text style={styles.statValue}>{counts.followers}</Text>
-                <Text style={styles.statLabel} numberOfLines={1}>Followers</Text>
-              </View>
+                <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Followers</Text>
+              </Pressable>
               <View style={styles.statDivider} />
-              <View style={styles.stat}>
+              <Pressable
+                style={styles.stat}
+                accessibilityRole="button"
+                accessibilityLabel={`${counts.following} following`}
+                onPress={() => router.push(`/connections?userId=${user.id}&type=following`)}>
                 <Text style={styles.statValue}>{counts.following}</Text>
-                <Text style={styles.statLabel} numberOfLines={1}>Following</Text>
-              </View>
+                <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Following</Text>
+              </Pressable>
               <View style={styles.statDivider} />
               <View style={styles.stat} accessibilityLabel={`${streak} day streak`}>
                 <View style={styles.streakValue}>
                   <Flame size={15} color={colors.ember} />
                   <Text style={styles.statValue}>{streak}</Text>
                 </View>
-                <Text style={styles.statLabel} numberOfLines={1}>Streak</Text>
+                <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Streak</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.stat}>
                 <Text style={[styles.statValue, avgScore != null && { color: scoreColor(avgScore) }]}>
                   {avgScore != null ? avgScore.toFixed(1) : '—'}
                 </Text>
-                <Text style={styles.statLabel} numberOfLines={1}>Avg</Text>
+                <Text style={styles.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Avg</Text>
               </View>
             </View>
 
@@ -223,7 +231,7 @@ const styles = StyleSheet.create({
   stat: { flex: 1, alignItems: 'center', gap: 3 },
   statDivider: { width: StyleSheet.hairlineWidth, height: 24, backgroundColor: colors.line },
   statValue: { fontFamily: fonts.display, fontSize: 19, color: colors.oliveDeep, letterSpacing: -0.4, fontVariant: ['tabular-nums'] },
-  statLabel: { fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 0.2, color: colors.ink50, textTransform: 'uppercase' },
+  statLabel: { fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 0.2, color: colors.ink50, textTransform: 'uppercase', alignSelf: 'stretch', textAlign: 'center' },
   streakValue: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   safetyRow: { flexDirection: 'row', gap: spacing(2) },
 });
