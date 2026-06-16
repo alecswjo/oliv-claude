@@ -93,9 +93,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="social"
         options={{
-          title: 'Social',
-          tabBarAccessibilityLabel: 'Social tab',
-          tabBarIcon: ({ focused }) => <TabGlyph icon="users" label="Social" focused={focused} />,
+          title: 'Discover',
+          tabBarAccessibilityLabel: 'Discover tab',
+          tabBarIcon: ({ focused }) => <TabGlyph icon="search" label="Discover" focused={focused} />,
         }}
       />
       <Tabs.Screen

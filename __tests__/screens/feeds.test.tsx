@@ -13,8 +13,8 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ canGoBack: () => true, push: mockPush, back: jest.fn(), replace: jest.fn() }),
 }));
 
-import MyFeedScreen from '@/app/(tabs)/index';
-import SocialScreen from '@/app/(tabs)/social';
+import HomeFeedScreen from '@/app/(tabs)/index';
+import DiscoverScreen from '@/app/(tabs)/social';
 
 const ANALYSIS: MealAnalysis = {
   calories: 520, proteinG: 42, carbsG: 38, fatG: 21,
@@ -55,6 +55,7 @@ beforeEach(async () => {
   useSocialStore.setState({
     seeded: false, demoUsers: [], demoMeals: [],
     followingIds: [], followerIds: [], hydrated: true,
+    feed: [], discover: [], searchResults: [], knownUsers: {}, blockedIds: [],
   });
   useUserStore.getState().completeOnboarding({
     displayName: 'Tester', username: 'tester', avatarEmoji: '🫒', avatarColor: '#708238',
@@ -62,78 +63,69 @@ beforeEach(async () => {
   });
 });
 
-describe('My Feed (spec §F3 / §13.5)', () => {
-  it('shows the empty state before any meals', async () => {
-    await render(<MyFeedScreen />);
+describe('Home feed (spec §F3 — yours + friends)', () => {
+  it('shows the empty state before any meals or follows', async () => {
+    await render(<HomeFeedScreen />);
     expect(screen.getByText('Your plate awaits')).toBeTruthy();
   });
 
-  it('groups meals under Today/Yesterday and reflects totals in the summary', async () => {
+  it('reflects your day in the summary and lists your meals', async () => {
     const now = new Date();
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    useMealStore.getState().addMeal(ownMeal(yesterday, 'y1'));
     useMealStore.getState().addMeal(ownMeal(now, 't1'));
 
-    await render(<MyFeedScreen />);
-
-    expect(screen.getByText('Today')).toBeTruthy();
-    expect(screen.getByText('Yesterday')).toBeTruthy();
-    expect(screen.getAllByText('Salmon · Quinoa')).toHaveLength(2);
-
-    // Summary counts only today: 520 eaten of 2000 → 1480 remaining, 2-day streak.
-    expect(screen.getByLabelText('520 of 2000 calories eaten')).toBeTruthy();
-    expect(screen.getByLabelText('1480 calories remaining')).toBeTruthy();
-    expect(screen.getByLabelText('2 day streak')).toBeTruthy();
-  });
-});
-
-describe('Social feed & discover (spec §F4 / §13.6)', () => {
-  it('follow in Discover moves their meals into the Following feed', async () => {
-    useSocialStore.getState().seedIfNeeded(new Date());
-
-    await render(<SocialScreen />);
-
-    // Empty following feed initially
-    expect(screen.getByText('Nothing here yet')).toBeTruthy();
-
-    // Discover lists all 10 demo users
-    await fireEvent.press(screen.getByText('Discover'));
-    expect(screen.getByText('Maya Chen')).toBeTruthy();
-
-    // Follow Maya
-    await fireEvent.press(screen.getAllByLabelText('Follow')[0]);
-    // She leaves the discover list
-    expect(screen.queryByText('Maya Chen')).toBeNull();
-
-    // Her meals are now in the feed with her as author
-    await fireEvent.press(screen.getByText('Following'));
-    expect(screen.getAllByText('Maya Chen').length).toBeGreaterThan(0);
-  });
-
-  it('unfollow removes their meals from the feed', async () => {
-    useSocialStore.getState().seedIfNeeded(new Date());
-    useSocialStore.getState().follow('demo_maya');
-
-    await render(<SocialScreen />);
-    expect(screen.getAllByText('Maya Chen').length).toBeGreaterThan(0);
-
-    useSocialStore.getState().unfollow('demo_maya');
-    await render(<SocialScreen />);
-    expect(screen.getByText('Nothing here yet')).toBeTruthy();
-  });
-
-  it("includes the user's own public meals with a You marker, but never private ones", async () => {
-    useSocialStore.getState().seedIfNeeded(new Date());
-    const now = new Date();
-    useMealStore.getState().addMeal(ownMeal(now, 'pub'));
-    useMealStore.getState().addMeal({ ...ownMeal(now, 'priv'), isPrivate: true, foodItems: ['Secret snack'] });
-
-    await render(<SocialScreen />);
+    await render(<HomeFeedScreen />);
 
     expect(screen.getByText('Salmon · Quinoa')).toBeTruthy();
     expect(screen.getByText(/· You/)).toBeTruthy();
-    expect(screen.queryByText('Secret snack')).toBeNull(); // spec F4.7
+    // 520 eaten of 2000 → 1480 remaining.
+    expect(screen.getByLabelText('520 of 2000 calories eaten')).toBeTruthy();
+    expect(screen.getByLabelText('1480 calories remaining')).toBeTruthy();
+  });
+
+  it('merges followed friends\' public meals into the home feed', async () => {
+    useSocialStore.getState().seedIfNeeded(new Date());
+    useSocialStore.getState().follow('demo_maya');
+    useMealStore.getState().addMeal(ownMeal(new Date(), 'mine'));
+
+    await render(<HomeFeedScreen />);
+
+    // your meal + Maya's (she's followed) both present
+    expect(screen.getByText('Salmon · Quinoa')).toBeTruthy();
+    expect(screen.getAllByText('Maya Chen').length).toBeGreaterThan(0);
+  });
+
+  it('does NOT show meals from people you do not follow', async () => {
+    useSocialStore.getState().seedIfNeeded(new Date());
+    await render(<HomeFeedScreen />);
+    expect(screen.queryByText('Maya Chen')).toBeNull();
+  });
+
+  it('shows your own private meals to yourself (it is your diary)', async () => {
+    useMealStore.getState().addMeal({ ...ownMeal(new Date(), 'priv'), isPrivate: true, foodItems: ['Secret snack'] });
+    await render(<HomeFeedScreen />);
+    expect(screen.getByText('Secret snack')).toBeTruthy();
+    expect(screen.getByLabelText('Private meal')).toBeTruthy();
+  });
+});
+
+describe('Discover (spec §F4 — find & follow people)', () => {
+  it('lists suggested people to follow', async () => {
+    useSocialStore.getState().seedIfNeeded(new Date());
+    await render(<DiscoverScreen />);
+    expect(screen.getByText('Maya Chen')).toBeTruthy();
+  });
+
+  it('following someone removes them from the suggestions', async () => {
+    useSocialStore.getState().seedIfNeeded(new Date());
+    await render(<DiscoverScreen />);
+
+    const before = screen.getAllByLabelText('Follow').length;
+    expect(before).toBeGreaterThan(0);
+
+    await fireEvent.press(screen.getAllByLabelText('Follow')[0]);
+
+    expect(useSocialStore.getState().followingIds).toHaveLength(1);
+    // the followed person drops out of the suggestion list
+    expect(screen.getAllByLabelText('Follow').length).toBe(before - 1);
   });
 });

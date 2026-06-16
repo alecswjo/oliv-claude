@@ -1,32 +1,49 @@
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
-import { RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { DailySummaryCard } from '@/components/DailySummaryCard';
 import { MealCard } from '@/components/MealCard';
 import { Button, EmptyState } from '@/components/ui';
-import { colors, spacing, type } from '@/components/theme';
-import { dayKey, dayLabel } from '@/domain/dates';
+import { colors, spacing } from '@/components/theme';
+import { isBackendConfigured } from '@/config';
+import { dayKey, dayKeyFromIso } from '@/domain/dates';
 import { computeStreak } from '@/domain/streaks';
-import { dayKeyFromIso } from '@/domain/dates';
-import { groupMealsByDay, summaryForDay } from '@/domain/summaries';
-import type { Meal } from '@/domain/types';
+import { summaryForDay } from '@/domain/summaries';
+import { DEFAULT_GOALS, type Meal, type UserProfile } from '@/domain/types';
 import { useMealStore } from '@/store/mealStore';
-import { useSocialStore } from '@/store/socialStore';
+import { selectHomeFeed, useSocialStore } from '@/store/socialStore';
 import { useUserStore } from '@/store/userStore';
 
-/** My Feed — the main page (spec §F3). */
-export default function MyFeedScreen() {
-  const [refreshing, setRefreshing] = useState(false);
+const BACKEND = isBackendConfigured();
+const PAGE_SIZE = 20;
+
+/** Home — your daily summary + a combined feed of your meals and friends' meals (spec §F3). */
+export default function HomeFeedScreen() {
   const router = useRouter();
   const profile = useUserStore((state) => state.profile);
   const meals = useMealStore((state) => state.meals);
   const toggleOlive = useSocialStore((state) => state.toggleOlive);
+  const demoMeals = useSocialStore((state) => state.demoMeals);
+  const demoUsers = useSocialStore((state) => state.demoUsers);
+  const liveFeed = useSocialStore((state) => state.feed);
+  const knownUsers = useSocialStore((state) => state.knownUsers);
+  const followingIds = useSocialStore((state) => state.followingIds);
+  const blockedIds = useSocialStore((state) => state.blockedIds);
+  const loadSocial = useSocialStore((state) => state.loadSocial);
+
+  const [pages, setPages] = useState(1);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Pull friends' meals when the home tab shows.
+  useEffect(() => {
+    if (BACKEND) void loadSocial();
+  }, [loadSocial]);
 
   const now = new Date();
   const todayKey = dayKey(now);
 
   const summary = useMemo(
-    () => summaryForDay(meals, todayKey, profile?.goals ?? { dailyCalories: 2000, proteinG: 100, carbsG: 263, fatG: 61 }),
+    () => summaryForDay(meals, todayKey, profile?.goals ?? DEFAULT_GOALS),
     [meals, todayKey, profile?.goals],
   );
 
@@ -36,67 +53,84 @@ export default function MyFeedScreen() {
     [meals, todayKey],
   );
 
-  const sections = useMemo(
+  const feed = useMemo(
     () =>
-      groupMealsByDay(meals).map((group) => ({
-        title: dayLabel(group.dayKey, now),
-        data: group.meals,
-      })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [meals, todayKey],
+      selectHomeFeed({
+        friendMeals: BACKEND ? liveFeed : demoMeals,
+        ownMeals: meals,
+        followingIds,
+        meId: profile?.id,
+        blockedIds,
+      }),
+    [liveFeed, demoMeals, meals, followingIds, profile?.id, blockedIds],
   );
+  const visible = feed.slice(0, pages * PAGE_SIZE);
+
+  const userById = useMemo(() => {
+    const map = new Map<string, UserProfile>();
+    if (BACKEND) {
+      for (const id of Object.keys(knownUsers)) map.set(id, knownUsers[id]);
+    } else {
+      for (const user of demoUsers) map.set(user.id, user);
+    }
+    if (profile) map.set(profile.id, profile);
+    return map;
+  }, [knownUsers, demoUsers, profile]);
+
+  const onRefresh = async () => {
+    if (!BACKEND) return;
+    const { backendActive, currentUserId, hydrateForUser } = await import('@/services/sync');
+    if (!backendActive()) return;
+    setRefreshing(true);
+    try {
+      await Promise.all([hydrateForUser(currentUserId()!), loadSocial()]);
+    } catch {
+      // pull again later
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   if (!profile) return null;
 
   return (
-    <SectionList<Meal>
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          tintColor={colors.olive}
-          onRefresh={async () => {
-            const { backendActive, currentUserId, hydrateForUser } = await import('@/services/sync');
-            if (!backendActive()) return;
-            setRefreshing(true);
-            try {
-              await hydrateForUser(currentUserId()!);
-            } catch {
-              // pull again later
-            } finally {
-              setRefreshing(false);
-            }
-          }}
-        />
-      }
-      sections={sections}
+    <FlatList<Meal>
+      data={visible}
       keyExtractor={(meal) => meal.id}
       style={styles.list}
       contentContainerStyle={styles.content}
-      stickySectionHeadersEnabled={false}
+      refreshControl={<RefreshControl refreshing={refreshing} tintColor={colors.olive} onRefresh={onRefresh} />}
+      onEndReached={() => {
+        if (visible.length < feed.length) setPages((count) => count + 1);
+      }}
+      onEndReachedThreshold={0.4}
       ListHeaderComponent={
         <View style={{ marginBottom: spacing(2) }}>
           <DailySummaryCard summary={summary} goals={profile.goals} streak={streak} />
         </View>
       }
-      renderSectionHeader={({ section }) => (
-        <Text style={styles.dayHeader}>{section.title}</Text>
-      )}
-      renderItem={({ item }) => (
-        <View style={{ marginBottom: spacing(3) }}>
-          <MealCard
-            meal={item}
-            isOwn
-            oliveActive={item.oliveUserIds.includes(profile.id)}
-            onPress={() => router.push(`/meal/${item.id}`)}
-            onToggleOlive={() => toggleOlive(item.id, profile.id)}
-          />
-        </View>
-      )}
+      renderItem={({ item }) => {
+        const isOwn = item.userId === profile.id;
+        return (
+          <View style={{ marginBottom: spacing(3) }}>
+            <MealCard
+              meal={item}
+              author={userById.get(item.userId) ?? null}
+              showAuthor
+              isOwn={isOwn}
+              oliveActive={item.oliveUserIds.includes(profile.id)}
+              onPress={() => router.push(`/meal/${item.id}`)}
+              onAuthorPress={isOwn ? undefined : () => router.push(`/user/${item.userId}`)}
+              onToggleOlive={() => toggleOlive(item.id, profile.id)}
+            />
+          </View>
+        );
+      }}
       ListEmptyComponent={
         <EmptyState
           icon="camera"
           title="Your plate awaits"
-          body="Snap a photo of your next meal and Oliv will figure out the calories, macros, and how healthy it really is."
+          body="Snap your next meal — and follow friends so their plates show up here too."
           action={<Button title="Log your first meal" icon="plus" onPress={() => router.push('/log')} />}
         />
       }
@@ -107,13 +141,4 @@ export default function MyFeedScreen() {
 const styles = StyleSheet.create({
   list: { flex: 1, backgroundColor: colors.cream },
   content: { padding: spacing(4), paddingBottom: spacing(10) },
-  dayHeader: {
-    ...type.smallBold,
-    color: colors.oliveDeep,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    fontSize: 12,
-    marginTop: spacing(2),
-    marginBottom: spacing(2.5),
-  },
 });

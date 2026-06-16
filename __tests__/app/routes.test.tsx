@@ -121,8 +121,8 @@ describe('Routes & navigation (integration through the real router)', () => {
     // My Feed renders the daily summary hero
     expect(await screen.findByText('kcal left')).toBeTruthy();
 
-    await fireEvent.press(screen.getByLabelText('Social tab'));
-    expect(await screen.findByText('Discover')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Discover tab'));
+    await waitFor(() => expect(app.getPathname()).toBe('/social'));
 
     await fireEvent.press(screen.getByLabelText('Progress tab'));
     expect(await screen.findByText('Last 7 days')).toBeTruthy();

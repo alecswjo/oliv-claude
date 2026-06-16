@@ -268,6 +268,32 @@ export const useSocialStore = create<SocialState>()((set, get) => {
 
 /* ------------------------------ pure selectors ------------------------------ */
 
+/**
+ * Home feed: ALL your own meals (private included — it's your diary) merged with
+ * the public meals of people you follow, newest first. `friendMeals` is the live
+ * backend feed when configured, else the demo meal pool.
+ */
+export function selectHomeFeed(args: {
+  friendMeals: Meal[];
+  ownMeals: Meal[];
+  followingIds: string[];
+  meId: string | undefined;
+  blockedIds?: string[];
+}): Meal[] {
+  const followed = new Set(args.followingIds);
+  const blocked = new Set(args.blockedIds ?? []);
+  const friends = args.friendMeals.filter(
+    (meal) =>
+      meal.userId !== args.meId &&
+      followed.has(meal.userId) &&
+      !meal.isPrivate &&
+      !blocked.has(meal.userId),
+  );
+  return [...args.ownMeals, ...friends].sort(
+    (a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime(),
+  );
+}
+
 /** Social feed — spec §F4.2: followed users' public meals + own public meals, newest first. */
 export function selectSocialFeed(args: {
   demoMeals: Meal[];
