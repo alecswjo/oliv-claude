@@ -138,7 +138,7 @@ Olive = the archetypal healthy food. The brand system uses an olive-green palett
 - **F4.7** Privacy: per-meal `private` flag; private meals never appear in social feed or on the public profile view, and show a lock badge on My Feed. Default privacy configurable in Settings.
 
 ### F5 — Health Score (the opinionated core)
-- Deterministic 1.0–5.0 score in 0.5 steps, computed per §6, displayed as olives (filled/half/empty) plus numeric value.
+- Deterministic 1.0–5.0 score in 0.1 steps, computed per §6, displayed as olives (filled/half/empty) plus numeric value.
 - Every score ships with a **breakdown**: list of `{factor, label, delta}` contributions ("High fiber +0.45", "Ultra-processed −0.9") shown on the review and detail screens. Tiny meals (<30 kcal) get the single informational row "Too small to score" (delta 0).
 - Daily average score = mean of the day's meal scores (weighted equally, tiny meals' 3.0 included), shown to one decimal.
 
@@ -176,18 +176,18 @@ From `MealAnalysis`: `calories`, `proteinG`, `carbsG`, `fatG`, `fiberG`, `sugarG
 | 7 | **Saturated fat** | satFatG per 100 kcal | ≥2.5 → **−0.6**; ≥1.5 → **−0.35**; ≥0.8 → **−0.15**; else 0 |
 | 8 | **Calorie bomb** | calories per meal | >1200 → **−0.4**; >900 → **−0.2**; else 0 |
 
-`score = clamp(round2half(3.0 + Σ deltas), 1.0, 5.0)` where `round2half` rounds to the nearest 0.5 (ties round up).
+`score = clamp(round1(3.0 + Σ deltas), 1.0, 5.0)` where `round1` rounds to the nearest 0.1 (ties round up).
 
-**Numeric robustness (normative):** all deltas are multiples of 0.05, so implementations must accumulate in **integer hundredths** (e.g. +80, −35) and only divide at the end — binary-float summation can land a true 4.25 tie at 4.2499…, flipping the rounding. Tier thresholds use `≥` except the calorie-bomb factor, which is a strict `>` on 900/1200 (expressed above as ≥901/≥1201 on whole-kcal inputs).
+**Numeric robustness (normative):** all deltas are multiples of 0.05, so implementations must accumulate in **integer hundredths** (e.g. +80, −35) and only divide at the end — binary-float summation can drift a true tie (e.g. 4.25 at 4.2499…), flipping the final 0.1 rounding. Tier thresholds use `≥` except the calorie-bomb factor, which is a strict `>` on 900/1200 (expressed above as ≥901/≥1201 on whole-kcal inputs).
 
 ### 6.3 Reference outcomes (acceptance tests)
 | Meal (typical analysis values) | Σ deltas | Expected |
 |---|---|---|
 | Grilled salmon + quinoa + broccoli (520 kcal, 42P, 38C, 21F, 8 fiber, 5 sugar, 380 sodium, 4 satfat, 2.5 FV, level 1) | +0.8 +0.45 +0.4 +0.4 = **+2.05** | **5.0** |
-| Chicken caesar salad, light (430 kcal, 35P, 18C, 24F, 4 fiber, 3 sugar, 740 sodium, 6 satfat, 1.5 FV, level 2) | +0.8 +0.2 +0.25 +0.15 −0.15 −0.15 = **+1.10** | **4.0** |
-| Frozen pepperoni pizza, 3 slices (850 kcal, 36P, 90C, 38F, 5 fiber, 9 sugar, 1900 sodium, 16 satfat, 0.5 FV, level 4 — pepperoni is ultra-processed) | +0.2 +0.1 −0.9 −0.15 −0.35 = **−1.10** | **2.0** |
-| Glazed donut + latte (540 kcal, 9P, 70C, 24F, 1 fiber, 38 sugar, 320 sodium, 11 satfat, 0 FV, level 4) | −0.9 −1.0 −0.35 = **−2.25** → 0.75, ties-up → | **1.0** |
-| Oatmeal + berries + almonds (380 kcal, 12P, 58C, 12F, **10** fiber, 12 sugar, 95 sodium, 1.5 satfat, 1 FV, level 1) | +0.2 +0.7 +0.25 +0.4 −0.3 = **+1.25** → 4.25, ties-up → | **4.5** |
+| Chicken caesar salad, light (430 kcal, 35P, 18C, 24F, 4 fiber, 3 sugar, 740 sodium, 6 satfat, 1.5 FV, level 2) | +0.8 +0.2 +0.25 +0.15 −0.15 −0.15 = **+1.10** → 4.10 | **4.1** |
+| Frozen pepperoni pizza, 3 slices (850 kcal, 36P, 90C, 38F, 5 fiber, 9 sugar, 1900 sodium, 16 satfat, 0.5 FV, level 4 — pepperoni is ultra-processed) | +0.2 +0.1 −0.9 −0.15 −0.35 = **−1.10** → 1.90 | **1.9** |
+| Glazed donut + latte (540 kcal, 9P, 70C, 24F, 1 fiber, 38 sugar, 320 sodium, 11 satfat, 0 FV, level 4) | −0.9 −1.0 −0.35 = **−2.25** → 0.75, clamped → | **1.0** |
+| Oatmeal + berries + almonds (380 kcal, 12P, 58C, 12F, **10** fiber, 12 sugar, 95 sodium, 1.5 satfat, 1 FV, level 1) | +0.2 +0.7 +0.25 +0.4 −0.3 = **+1.25** → 4.25, ties-up to 0.1 → | **4.3** |
 
 (The implementation's unit tests must assert these exact values. Rows 4–5 deliberately exercise the ties-round-up rule; row 1's satfat density 0.769 and row 4's sugar density 7.037 deliberately sit just off tier boundaries.)
 
