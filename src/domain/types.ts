@@ -48,6 +48,9 @@ export interface Meal {
   /** Up to 5 photos; the first is the hero. Empty/undefined => emoji tile. */
   photoUris?: string[];
   emoji?: string;
+  /** Optional social caption/title for the post — NOT fed to the analyzer. */
+  caption?: string;
+  /** Food description that drives the AI analysis. */
   description: string;
   mealType: MealType;
   loggedAt: string;

@@ -66,6 +66,7 @@ export default function LogMealScreen() {
 
   const [mealType, setMealType] = useState<MealType>(mealTypeForHour(new Date().getHours()));
   const [description, setDescription] = useState('');
+  const [caption, setCaption] = useState('');
   const [photos, setPhotos] = useState<PreparedPhoto[]>([]);
   const [cameraDenied, setCameraDenied] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -231,6 +232,7 @@ export default function LogMealScreen() {
       userId: profile.id,
       photoUris,
       emoji: photoUris?.length ? undefined : MEAL_TYPE_EMOJI[mealType],
+      caption: caption.trim() || undefined,
       description: description.trim() || liveAnalysis.foodItems.join(', '),
       mealType,
       loggedAt: new Date().toISOString(),
@@ -446,6 +448,17 @@ export default function LogMealScreen() {
           {liveScore ? <HealthScoreBadge value={liveScore.value} size="lg" /> : null}
         </View>
         {liveScore ? <ScoreBreakdown score={liveScore} /> : null}
+      </Card>
+
+      <Card style={{ gap: spacing(3) }}>
+        <Field
+          label="Caption (optional)"
+          placeholder="Say something about this meal…"
+          value={caption}
+          onChangeText={setCaption}
+          maxLength={140}
+        />
+        <Text style={type.tiny}>Shown on your post — separate from the food details used for analysis.</Text>
       </Card>
 
       <Card style={{ gap: spacing(3) }}>

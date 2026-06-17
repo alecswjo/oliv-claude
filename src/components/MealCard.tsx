@@ -118,9 +118,16 @@ export function MealCard({
 
       {/* title + score */}
       <View style={styles.titleRow}>
-        <Text style={[type.heading, { flex: 1 }]} numberOfLines={2}>
-          {title}
-        </Text>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={type.heading} numberOfLines={2}>
+            {meal.caption || title}
+          </Text>
+          {meal.caption ? (
+            <Text style={type.small} numberOfLines={1}>
+              {title}
+            </Text>
+          ) : null}
+        </View>
         <HealthScoreBadge value={meal.healthScore.value} size="sm" />
       </View>
 

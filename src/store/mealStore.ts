@@ -14,12 +14,15 @@ const STORE_NAME = 'meals';
 
 /** Editing any of these flips `source` ai → ai-adjusted (spec F2.8). */
 export interface MealEditPatch {
+  caption?: string;
   description?: string;
   mealType?: Meal['mealType'];
   nutrition?: NutritionFacts;
   foodItems?: string[];
   fruitVegServings?: number;
   processingLevel?: Meal['processingLevel'];
+  confidence?: Meal['confidence'];
+  source?: Meal['source'];
   healthScore?: Meal['healthScore'];
   isPrivate?: boolean;
 }
@@ -101,7 +104,9 @@ export const useMealStore = create<MealState>()((set, get) => {
           ...meal,
           ...patch,
           nutrition: patch.nutrition ?? meal.nutrition,
-          source: touchesAnalysis && meal.source === 'ai' ? ('ai-adjusted' as const) : meal.source,
+          source:
+            patch.source ??
+            (touchesAnalysis && meal.source === 'ai' ? ('ai-adjusted' as const) : meal.source),
         };
       });
       setMeals(meals);

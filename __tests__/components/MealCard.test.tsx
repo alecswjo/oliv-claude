@@ -49,6 +49,12 @@ describe('MealCard', () => {
     expect(screen.getByText('1')).toBeTruthy(); // comments
   });
 
+  it('shows the caption as the headline with food items beneath', async () => {
+    await render(<MealCard meal={meal({ caption: 'post-gym fuel 💪' })} isOwn oliveActive={false} />);
+    expect(screen.getByText('post-gym fuel 💪')).toBeTruthy(); // caption headline
+    expect(screen.getByText('Chicken bowl · Avocado')).toBeTruthy(); // food subtitle
+  });
+
   it('shows the lock badge only for private meals', async () => {
     const { rerender } = await render(<MealCard meal={meal({ isPrivate: true })} isOwn oliveActive={false} />);
     expect(screen.getByLabelText('Private meal')).toBeTruthy();
