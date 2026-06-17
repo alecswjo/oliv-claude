@@ -4,6 +4,7 @@ import type { Comment, Meal, UserProfile } from '@/domain/types';
 import { loadJson, saveJson } from '@/services/storage';
 import type { MealEditPatch } from '@/store/mealStore';
 import { useAuthStore } from '@/store/authStore';
+import type { NotifPrefs } from '@/store/notificationStore';
 import { showToast } from '@/store/toastStore';
 
 /**
@@ -58,7 +59,10 @@ type PendingOp =
   | { kind: 'comment'; mealId: string; comment: Comment }
   | { kind: 'commentDelete'; commentId: string }
   | { kind: 'follow'; followerId: string; followingId: string; on: boolean }
-  | { kind: 'profile'; profile: UserProfile };
+  | { kind: 'profile'; profile: UserProfile }
+  | { kind: 'deviceToken'; token: string; platform: string }
+  | { kind: 'deviceTokenRemove'; token: string }
+  | { kind: 'notifPrefs'; prefs: NotifPrefs };
 
 type QueuedOp = PendingOp & { attempts: number };
 
@@ -120,6 +124,21 @@ async function execute(op: PendingOp): Promise<void> {
       return repo.deleteComment(op.commentId);
     case 'profile':
       return repo.upsertProfile(op.profile);
+    case 'deviceToken': {
+      const uid = currentUserId();
+      if (!uid) return;
+      return repo.upsertDeviceToken(uid, op.token, op.platform);
+    }
+    case 'deviceTokenRemove': {
+      const uid = currentUserId();
+      if (!uid) return;
+      return repo.deleteDeviceToken(uid, op.token);
+    }
+    case 'notifPrefs': {
+      const uid = currentUserId();
+      if (!uid) return;
+      return repo.upsertNotificationPrefs(uid, op.prefs);
+    }
   }
 }
 
@@ -261,6 +280,18 @@ export function pushCommentDelete(commentId: string): void {
 
 export function pushProfile(profile: UserProfile): void {
   run({ kind: 'profile', profile });
+}
+
+export function pushDeviceToken(token: string, platform: string): void {
+  run({ kind: 'deviceToken', token, platform });
+}
+
+export function removeDeviceToken(token: string): void {
+  run({ kind: 'deviceTokenRemove', token });
+}
+
+export function pushNotificationPrefs(prefs: NotifPrefs): void {
+  run({ kind: 'notifPrefs', prefs });
 }
 
 /* -------------------------------- hydrate -------------------------------- */

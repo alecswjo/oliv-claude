@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { loadJson } from '@/services/storage';
 import { createPersister } from './persist';
 import { useMealStore } from './mealStore';
+import { useNotificationStore } from './notificationStore';
 import { useSocialStore } from './socialStore';
 import { useUserStore } from './userStore';
 
@@ -49,6 +50,7 @@ export async function hydrateAll(): Promise<void> {
     useUserStore.getState().hydrate(),
     useMealStore.getState().hydrate(),
     useSocialStore.getState().hydrate(),
+    useNotificationStore.getState().hydrate(),
   ]);
   useSocialStore.getState().seedIfNeeded();
 }

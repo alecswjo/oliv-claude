@@ -24,6 +24,11 @@ jest.mock('@/services/supabase/repo', () => ({
   setOlive: jest.fn(),
   insertComment: jest.fn(),
   deleteComment: jest.fn(),
+  follow: jest.fn(),
+  unfollow: jest.fn(),
+  upsertDeviceToken: jest.fn(),
+  deleteDeviceToken: jest.fn(),
+  upsertNotificationPrefs: jest.fn(),
 }));
 jest.mock('@/services/supabase/photos', () => ({
   uploadMealPhoto: jest.fn(),
@@ -289,5 +294,40 @@ describe('hydrateForUser reconciliation', () => {
 
     // The meal stays local even though the re-push failed; retried next launch.
     expect(useMealStore.getState().meals.map((m) => m.id)).toEqual(['m-local']);
+  });
+});
+
+describe('notification sync ops', () => {
+  it('pushDeviceToken upserts the token for the signed-in user', async () => {
+    signIn('auth-1');
+    mocked.upsertDeviceToken.mockResolvedValue(undefined);
+    sync.pushDeviceToken('ExponentPushToken[xyz]', 'ios');
+    await sync.flushSync();
+    expect(mocked.upsertDeviceToken).toHaveBeenCalledWith('auth-1', 'ExponentPushToken[xyz]', 'ios');
+  });
+
+  it('removeDeviceToken deletes the token for the signed-in user', async () => {
+    signIn('auth-1');
+    mocked.deleteDeviceToken.mockResolvedValue(undefined);
+    sync.removeDeviceToken('ExponentPushToken[xyz]');
+    await sync.flushSync();
+    expect(mocked.deleteDeviceToken).toHaveBeenCalledWith('auth-1', 'ExponentPushToken[xyz]');
+  });
+
+  it('pushNotificationPrefs upserts prefs for the signed-in user', async () => {
+    signIn('auth-1');
+    mocked.upsertNotificationPrefs.mockResolvedValue(undefined);
+    const prefs = { olives: true, comments: false, follows: true, newPosts: true };
+    sync.pushNotificationPrefs(prefs);
+    await sync.flushSync();
+    expect(mocked.upsertNotificationPrefs).toHaveBeenCalledWith('auth-1', prefs);
+  });
+
+  it('notification ops are no-ops when signed out', async () => {
+    sync.pushDeviceToken('t', 'ios');
+    sync.pushNotificationPrefs({ olives: true, comments: true, follows: true, newPosts: true });
+    await sync.flushSync();
+    expect(mocked.upsertDeviceToken).not.toHaveBeenCalled();
+    expect(mocked.upsertNotificationPrefs).not.toHaveBeenCalled();
   });
 });

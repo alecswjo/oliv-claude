@@ -307,3 +307,32 @@ export async function setBlocked(blockerId: string, blockedId: string, on: boole
     : await db.from('blocks').delete().eq('blocker_id', blockerId).eq('blocked_id', blockedId);
   if (error) throw error;
 }
+
+/* ----------------------------- notifications ----------------------------- */
+
+export async function upsertDeviceToken(userId: string, token: string, platform: string): Promise<void> {
+  const { error } = await client()
+    .from('device_tokens')
+    .upsert({ user_id: userId, token, platform, updated_at: new Date().toISOString() });
+  if (error) throw error;
+}
+
+export async function deleteDeviceToken(userId: string, token: string): Promise<void> {
+  const { error } = await client().from('device_tokens').delete().eq('user_id', userId).eq('token', token);
+  if (error) throw error;
+}
+
+export async function upsertNotificationPrefs(
+  userId: string,
+  prefs: { olives: boolean; comments: boolean; follows: boolean; newPosts: boolean },
+): Promise<void> {
+  const { error } = await client().from('notification_prefs').upsert({
+    user_id: userId,
+    olives: prefs.olives,
+    comments: prefs.comments,
+    follows: prefs.follows,
+    new_posts: prefs.newPosts,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw error;
+}

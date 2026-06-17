@@ -64,6 +64,16 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   async signOut() {
     if (isBackendConfigured()) {
+      // Stop pushes to this device for the departing account before the
+      // session is gone (the delete is RLS-scoped to the signed-in user).
+      const { useNotificationStore } = await import('@/store/notificationStore');
+      const token = useNotificationStore.getState().pushToken;
+      if (token) {
+        const sync = await import('@/services/sync');
+        sync.removeDeviceToken(token);
+        await sync.flushSync().catch(() => {});
+      }
+
       const { signOut } = await import('@/services/supabase/auth');
       await signOut();
       // Clear the local cache so another account signing in on this device
@@ -77,6 +87,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       useMealStore.getState().reset();
       useSocialStore.getState().reset();
       useSocialStore.getState().seedIfNeeded();
+      useNotificationStore.getState().reset();
     }
     set({ status: 'signedOut', userId: null, email: undefined, hydrateFailed: false });
   },

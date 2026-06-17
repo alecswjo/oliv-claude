@@ -8,7 +8,7 @@ import { SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from '@expo-google-fonts
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Updates from 'expo-updates';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { Pressable } from 'react-native';
@@ -21,7 +21,15 @@ import { KeyboardDoneBar } from '@/components/ui';
 import { onSaveError } from '@/services/storage';
 import { hydrateAll } from '@/store/appStore';
 import { useAuthStore } from '@/store/authStore';
+import { useNotificationStore } from '@/store/notificationStore';
 import { showToast } from '@/store/toastStore';
+
+/** Route to the relevant screen when a notification is tapped. */
+function routeFromNotification(data: Record<string, unknown> | null): void {
+  if (!data) return;
+  if (typeof data.mealId === 'string') router.push(`/meal/${data.mealId}`);
+  else if (typeof data.userId === 'string') router.push(`/user/${data.userId}`);
+}
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -101,6 +109,11 @@ export default function RootLayout() {
             });
           }
         }
+
+        // Configure the notification handler + re-register the push token and
+        // local reminder. Never prompts — only acts if permission is already
+        // granted (the prompt lives in Settings, per best practice).
+        await useNotificationStore.getState().syncRegistration();
       } catch (error) {
         // Never strand the user on the splash screen — local mode still works.
         // eslint-disable-next-line no-console
@@ -119,6 +132,30 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (ready) void SplashScreen.hideAsync().catch(() => {});
+  }, [ready]);
+
+  // Route on notification taps (foreground/background + cold-start). Set up
+  // once the router is mounted; the service is dynamically imported so the
+  // native module never enters the offline/test graph.
+  useEffect(() => {
+    if (!ready) return;
+    let unsubscribe = () => {};
+    let cancelled = false;
+    (async () => {
+      try {
+        const notif = await import('@/services/notifications');
+        if (cancelled) return;
+        unsubscribe = notif.addResponseListener(routeFromNotification);
+        const initial = await notif.getInitialResponseData();
+        if (!cancelled) routeFromNotification(initial);
+      } catch {
+        // notifications unavailable (web / unsupported)
+      }
+    })();
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [ready]);
 
   if (!ready) return null; // native splash holds while stores hydrate + fonts load
