@@ -82,7 +82,7 @@ describe('Meal detail (spec §F4.4/F4.5/F2.8)', () => {
     expect(screen.getByText('430 kcal')).toBeTruthy();
     expect(screen.getByText('Why this score')).toBeTruthy();
     expect(screen.getByText('Excellent protein')).toBeTruthy();
-    expect(screen.getByLabelText('Health score 4 out of 5')).toBeTruthy();
+    expect(screen.getByLabelText('Health score 4.1 out of 5')).toBeTruthy();
   });
 
   it('adds a comment through the composer and persists it to the store', async () => {

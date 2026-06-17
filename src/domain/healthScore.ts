@@ -75,21 +75,17 @@ function pushFactor(factors: ScoreFactor[], factor: string, tier: Tier | undefin
   if (tier) factors.push({ factor, label: tier.label, delta: tier.delta });
 }
 
-/** Round to nearest 0.5, ties rounding up (4.25 → 4.5). */
-export function roundToHalf(value: number): number {
-  return Math.round(value * 2) / 2;
-}
-
 /**
  * All deltas are multiples of 0.05, so we accumulate in integer hundredths and
- * only divide at the end — float summation can land a true 4.25 tie at
- * 4.2499…, flipping round-to-half the wrong way (spec §6.2).
+ * only divide at the end — float summation can drift a true tie (e.g. 4.25 at
+ * 4.2499…), flipping the final rounding the wrong way (spec §6.2). The score is
+ * rounded to the nearest 0.1, ties rounding up.
  */
 function scoreFromFactors(factors: ScoreFactor[]): number {
   const hundredths =
     BASE_SCORE * 100 + factors.reduce((sum, f) => sum + Math.round(f.delta * 100), 0);
-  const halves = Math.round(hundredths / 50); // ties round up: x.5 halves → up
-  return Math.min(5, Math.max(1, halves / 2));
+  const tenths = Math.round(hundredths / 10); // nearest 0.1; ties (x.5 tenths) round up
+  return Math.min(5, Math.max(1, tenths / 10));
 }
 
 export function computeHealthScore(analysis: MealAnalysis): HealthScore {

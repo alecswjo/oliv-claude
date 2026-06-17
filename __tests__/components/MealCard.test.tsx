@@ -43,10 +43,16 @@ describe('MealCard', () => {
     expect(screen.getByText('35g')).toBeTruthy();
     expect(screen.getByText('48g')).toBeTruthy();
     expect(screen.getByText('18g')).toBeTruthy();
-    expect(screen.getByText(/Lunch · 12:30 PM/)).toBeTruthy();
+    expect(screen.getByText(/Lunch ·.*12:30 PM/)).toBeTruthy();
     expect(screen.getByLabelText('Health score 4.5 out of 5')).toBeTruthy();
     expect(screen.getByText('2')).toBeTruthy(); // olives
     expect(screen.getByText('1')).toBeTruthy(); // comments
+  });
+
+  it('shows the caption as the headline with food items beneath', async () => {
+    await render(<MealCard meal={meal({ caption: 'post-gym fuel 💪' })} isOwn oliveActive={false} />);
+    expect(screen.getByText('post-gym fuel 💪')).toBeTruthy(); // caption headline
+    expect(screen.getByText('Chicken bowl · Avocado')).toBeTruthy(); // food subtitle
   });
 
   it('shows the lock badge only for private meals', async () => {

@@ -79,11 +79,14 @@ export async function setMealPhotoPaths(mealId: string, paths: string[]): Promis
 
 export async function updateMeal(id: string, patch: MealEditPatch): Promise<void> {
   const row: Record<string, unknown> = {};
+  if (patch.caption !== undefined) row.caption = patch.caption;
   if (patch.description !== undefined) row.description = patch.description;
   if (patch.mealType !== undefined) row.meal_type = patch.mealType;
   if (patch.foodItems !== undefined) row.food_items = patch.foodItems;
   if (patch.fruitVegServings !== undefined) row.fruit_veg_servings = patch.fruitVegServings;
   if (patch.processingLevel !== undefined) row.processing_level = patch.processingLevel;
+  if (patch.confidence !== undefined) row.confidence = patch.confidence;
+  if (patch.source !== undefined) row.source = patch.source;
   if (patch.isPrivate !== undefined) row.is_private = patch.isPrivate;
   if (patch.healthScore !== undefined) {
     row.health_score_value = patch.healthScore.value;

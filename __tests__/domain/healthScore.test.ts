@@ -1,9 +1,4 @@
-import {
-  BASE_SCORE,
-  computeHealthScore,
-  roundToHalf,
-  scoreTone,
-} from '@/domain/healthScore';
+import { BASE_SCORE, computeHealthScore, scoreTone } from '@/domain/healthScore';
 import type { MealAnalysis } from '@/domain/types';
 
 function analysis(overrides: Partial<MealAnalysis>): MealAnalysis {
@@ -24,20 +19,6 @@ function analysis(overrides: Partial<MealAnalysis>): MealAnalysis {
   };
 }
 
-describe('roundToHalf', () => {
-  it.each([
-    [4.25, 4.5], // tie rounds up
-    [4.1, 4.0],
-    [4.74, 4.5],
-    [4.75, 5.0],
-    [2.55, 2.5],
-    [0.75, 1.0],
-    [3.0, 3.0],
-  ])('rounds %f to %f', (input, expected) => {
-    expect(roundToHalf(input)).toBe(expected);
-  });
-});
-
 describe('computeHealthScore — spec §6.3 reference meals', () => {
   it('scores grilled salmon + quinoa + broccoli at 5.0', () => {
     const score = computeHealthScore(
@@ -50,7 +31,7 @@ describe('computeHealthScore — spec §6.3 reference meals', () => {
     expect(score.value).toBe(5.0);
   });
 
-  it('scores light chicken caesar salad at 4.0', () => {
+  it('scores light chicken caesar salad at 4.1', () => {
     const score = computeHealthScore(
       analysis({
         calories: 430, proteinG: 35, carbsG: 18, fatG: 24,
@@ -58,10 +39,10 @@ describe('computeHealthScore — spec §6.3 reference meals', () => {
         fruitVegServings: 1.5, processingLevel: 2,
       }),
     );
-    expect(score.value).toBe(4.0);
+    expect(score.value).toBe(4.1);
   });
 
-  it('scores frozen pepperoni pizza (3 slices) at 2.0', () => {
+  it('scores frozen pepperoni pizza (3 slices) at 1.9', () => {
     const score = computeHealthScore(
       analysis({
         calories: 850, proteinG: 36, carbsG: 90, fatG: 38,
@@ -69,7 +50,7 @@ describe('computeHealthScore — spec §6.3 reference meals', () => {
         fruitVegServings: 0.5, processingLevel: 4,
       }),
     );
-    expect(score.value).toBe(2.0);
+    expect(score.value).toBe(1.9);
   });
 
   it('scores glazed donut + latte at 1.0 (clamped)', () => {
@@ -83,7 +64,7 @@ describe('computeHealthScore — spec §6.3 reference meals', () => {
     expect(score.value).toBe(1.0);
   });
 
-  it('scores oatmeal + berries + almonds at 4.5 (exercises tie-up rounding)', () => {
+  it('scores oatmeal + berries + almonds at 4.3 (exercises tie-up rounding)', () => {
     const score = computeHealthScore(
       analysis({
         calories: 380, proteinG: 12, carbsG: 58, fatG: 12,
@@ -91,7 +72,7 @@ describe('computeHealthScore — spec §6.3 reference meals', () => {
         fruitVegServings: 1, processingLevel: 1,
       }),
     );
-    expect(score.value).toBe(4.5);
+    expect(score.value).toBe(4.3);
   });
 });
 
@@ -229,7 +210,8 @@ describe('computeHealthScore — bounds & edge cases', () => {
 
   it('lands exact ties despite float-hostile delta combinations (spec §6.2 robustness rule)', () => {
     // +0.2 +0.7 +0.25 +0.4 −0.3 sums to 1.2499999999999998 in naive float math;
-    // integer-hundredths accumulation must still treat it as a 4.25 tie → 4.5.
+    // integer-hundredths accumulation keeps the true 4.25 → at 0.1 rounding the
+    // 42.5-tenths tie rounds up to 4.3.
     const score = computeHealthScore(
       analysis({
         calories: 380, proteinG: 12, carbsG: 58, fatG: 12,
@@ -239,7 +221,7 @@ describe('computeHealthScore — bounds & edge cases', () => {
     );
     const sum = score.factors.reduce((acc, f) => acc + f.delta, 0);
     expect(sum).not.toBe(1.25); // demonstrates the naive sum drifts…
-    expect(score.value).toBe(4.5); // …but the score is still exact
+    expect(score.value).toBe(4.3); // …but the score is still exact
   });
 
   it('neutral mid-range meal stays near base', () => {

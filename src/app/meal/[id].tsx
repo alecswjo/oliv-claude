@@ -16,6 +16,7 @@ import { newId } from '@/domain/ids';
 import { parseNumericInput } from '@/domain/numbers';
 import { mealTitle, validateAnalysis } from '@/domain/nutritionValidation';
 import type { Meal } from '@/domain/types';
+import { runAnalysis } from '@/services/analyzer/provider';
 import { confirmAction } from '@/services/confirm';
 import { blockUser, reportContent } from '@/services/safety';
 import { deletePhotosForMeal } from '@/services/photos';
@@ -58,6 +59,12 @@ export default function MealDetailScreen() {
   const [proteinG, setProteinG] = useState('');
   const [carbsG, setCarbsG] = useState('');
   const [fatG, setFatG] = useState('');
+
+  // Post (caption + food description) editing, with optional AI re-analysis.
+  const [postEditing, setPostEditing] = useState(false);
+  const [captionDraft, setCaptionDraft] = useState('');
+  const [descDraft, setDescDraft] = useState('');
+  const [reanalyzing, setReanalyzing] = useState(false);
 
   const resolveUser = useMemo(() => {
     const map = new Map<string, typeof profile>(demoUsers.map((user) => [user.id, user]));
@@ -114,6 +121,54 @@ export default function MealDetailScreen() {
     });
     setEditing(false);
     showToast('Nutrition updated');
+  };
+
+  const startPostEdit = () => {
+    setCaptionDraft(meal.caption ?? '');
+    setDescDraft(meal.description);
+    setPostEditing(true);
+  };
+
+  const savePostText = () => {
+    updateMeal(meal.id, {
+      caption: captionDraft.trim() || undefined,
+      description: descDraft.trim(),
+    });
+    setPostEditing(false);
+    showToast('Post updated');
+  };
+
+  const reanalyze = async () => {
+    const desc = descDraft.trim();
+    if (!desc) {
+      showToast('Add a description to re-analyze.');
+      return;
+    }
+    setReanalyzing(true);
+    try {
+      const result = await runAnalysis({ description: desc, mealType: meal.mealType });
+      const next = validateAnalysis(result.analysis);
+      updateMeal(meal.id, {
+        caption: captionDraft.trim() || undefined,
+        description: desc,
+        nutrition: {
+          calories: next.calories, proteinG: next.proteinG, carbsG: next.carbsG, fatG: next.fatG,
+          fiberG: next.fiberG, sugarG: next.sugarG, sodiumMg: next.sodiumMg, saturatedFatG: next.saturatedFatG,
+        },
+        foodItems: next.foodItems,
+        fruitVegServings: next.fruitVegServings,
+        processingLevel: next.processingLevel,
+        confidence: next.confidence,
+        source: 'ai',
+        healthScore: computeHealthScore(next),
+      });
+      setPostEditing(false);
+      showToast('Re-analyzed and updated');
+    } catch {
+      showToast("Couldn't re-analyze — try again in a moment.");
+    } finally {
+      setReanalyzing(false);
+    }
   };
 
   const confirmDelete = async () => {
@@ -210,8 +265,51 @@ export default function MealDetailScreen() {
           </View>
         )}
 
-        <Text style={type.heading}>{mealTitle(meal.foodItems, meal.description)}</Text>
-        {meal.description ? <Text style={type.body}>{meal.description}</Text> : null}
+        {postEditing ? (
+          <View style={{ gap: spacing(3) }}>
+            <Field
+              label="Caption (optional)"
+              placeholder="Say something about this meal…"
+              value={captionDraft}
+              onChangeText={setCaptionDraft}
+              maxLength={140}
+            />
+            <Field
+              label="What did you eat? (used for AI analysis)"
+              placeholder="e.g. grilled chicken with brown rice and broccoli"
+              value={descDraft}
+              onChangeText={setDescDraft}
+              multiline
+              maxLength={500}
+              style={{ minHeight: 64 }}
+            />
+            <Button
+              title={reanalyzing ? 'Re-analyzing…' : 'Re-analyze with AI'}
+              icon="refresh-cw"
+              loading={reanalyzing}
+              onPress={reanalyze}
+            />
+            <View style={{ flexDirection: 'row', gap: spacing(3) }}>
+              <Button title="Save text only" variant="secondary" onPress={savePostText} style={{ flex: 1 }} />
+              <Button title="Cancel" variant="ghost" onPress={() => setPostEditing(false)} style={{ flex: 1 }} />
+            </View>
+          </View>
+        ) : (
+          <>
+            <View style={styles.titleHeaderRow}>
+              <Text style={[type.heading, { flex: 1 }]}>
+                {meal.caption || mealTitle(meal.foodItems, meal.description)}
+              </Text>
+              {isOwn ? (
+                <Button title="Edit post" variant="ghost" icon="edit-2" onPress={startPostEdit} style={styles.smallButton} />
+              ) : null}
+            </View>
+            {meal.caption ? (
+              <Text style={type.small}>{mealTitle(meal.foodItems, meal.description)}</Text>
+            ) : null}
+            {meal.description ? <Text style={type.body}>{meal.description}</Text> : null}
+          </>
+        )}
 
         <View style={styles.scoreRow}>
           <HealthScoreBadge value={meal.healthScore.value} size="lg" />
@@ -370,6 +468,7 @@ const styles = StyleSheet.create({
   },
   oliveCount: { fontFamily: fonts.sansBold, fontSize: 15, color: colors.ink70, fontVariant: ['tabular-nums'] },
   nutritionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  titleHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing(2) },
   smallButton: { minHeight: 32, paddingVertical: 4, paddingHorizontal: spacing(3) },
   nutritionRow: {
     flexDirection: 'row',

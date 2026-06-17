@@ -51,6 +51,7 @@ export interface MealRow {
   photo_path: string | null;
   photo_paths: string[];
   emoji: string | null;
+  caption?: string | null;
   description: string;
   meal_type: MealType;
   logged_at: string;
@@ -125,6 +126,7 @@ export function rowToMeal(row: MealRow, photoUrl?: (path: string) => string): Me
     userId: row.user_id,
     photoUris: paths.length && photoUrl ? paths.map(photoUrl) : undefined,
     emoji: row.emoji ?? undefined,
+    caption: row.caption ?? undefined,
     description: row.description,
     mealType: row.meal_type,
     loggedAt: row.logged_at,
@@ -160,6 +162,7 @@ export function mealToInsert(meal: Meal): Omit<MealRow, 'olives' | 'comments'> {
     photo_path: null,
     photo_paths: [],
     emoji: meal.emoji ?? null,
+    caption: meal.caption ?? null,
     description: meal.description,
     meal_type: meal.mealType,
     logged_at: meal.loggedAt,

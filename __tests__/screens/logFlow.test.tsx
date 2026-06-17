@@ -55,7 +55,7 @@ describe('Log meal flow (spec J2 / §13.2)', () => {
     expect(await screen.findByText(/Offline estimate · medium confidence/)).toBeTruthy();
     expect(screen.getByDisplayValue('550')).toBeTruthy(); // summed lexicon calories
     expect(screen.getByDisplayValue('Grilled chicken, Brown rice, Broccoli')).toBeTruthy();
-    expect(screen.getByLabelText('Health score 4.5 out of 5')).toBeTruthy();
+    expect(screen.getByLabelText('Health score 4.7 out of 5')).toBeTruthy();
     expect(screen.getByText('Excellent protein')).toBeTruthy(); // breakdown row
 
     await fireEvent.press(screen.getByLabelText('Save meal'));
@@ -64,7 +64,7 @@ describe('Log meal flow (spec J2 / §13.2)', () => {
     expect(meals).toHaveLength(1);
     expect(meals[0].nutrition.calories).toBe(550);
     expect(meals[0].foodItems).toEqual(['Grilled chicken', 'Brown rice', 'Broccoli']);
-    expect(meals[0].healthScore.value).toBe(4.5);
+    expect(meals[0].healthScore.value).toBe(4.7);
     expect(meals[0].source).toBe('ai');
     expect(meals[0].isPrivate).toBe(false);
     expect(mockBack).toHaveBeenCalled();
@@ -78,7 +78,7 @@ describe('Log meal flow (spec J2 / §13.2)', () => {
     await screen.findByText(/Offline estimate/);
 
     // Donut alone: ultra-processed (−0.9), sugary (−0.6), fatty (−0.35) → 1.15 → 1.0
-    expect(screen.getByLabelText('Health score 1 out of 5')).toBeTruthy();
+    expect(screen.getByLabelText('Health score 1.2 out of 5')).toBeTruthy();
 
     // User corrects it: actually it was a high-protein yogurt bowl
     await fireEvent.changeText(screen.getByLabelText('Calories'), '300');
@@ -94,8 +94,8 @@ describe('Log meal flow (spec J2 / §13.2)', () => {
     expect(meal.source).toBe('ai-adjusted');
     expect(meal.nutrition.calories).toBe(300);
     expect(meal.processingLevel).toBe(1);
-    // protein share 30*4/300 = 0.4 → +0.8; level 1 → +0.4 → ≥ 4.0
-    expect(meal.healthScore.value).toBeGreaterThanOrEqual(4);
+    // protein share 30*4/300 = 0.4 → +0.8; level 1 → +0.4 → a big jump from the donut's 1.2
+    expect(meal.healthScore.value).toBeGreaterThanOrEqual(3.5);
   });
 
   it('blocks analysis with no photo and no description', async () => {
