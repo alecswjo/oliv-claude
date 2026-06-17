@@ -135,13 +135,16 @@ export const useSocialStore = create<SocialState>()((set, get) => {
       const repo = await import('@/services/supabase/repo');
       try {
         const followingIds = await repo.fetchFollowingIds(me);
-        const [feed, discover, followed] = await Promise.all([
+        const [feed, discover] = await Promise.all([
           repo.fetchFeed(followingIds),
           repo.fetchDiscover([me, ...followingIds, ...get().blockedIds]),
-          repo.fetchProfilesByIds(followingIds),
         ]);
+        // Resolve every feed author (not just the follow list) so cards always
+        // show a name, even if the follow set and the feed drift.
+        const authorIds = [...new Set([...followingIds, ...feed.map((m) => m.userId)])];
+        const profiles = await repo.fetchProfilesByIds(authorIds);
         const knownUsers = { ...get().knownUsers };
-        for (const user of [...discover, ...followed]) knownUsers[user.id] = user;
+        for (const user of [...discover, ...profiles]) knownUsers[user.id] = user;
         set({ followingIds, feed, discover, knownUsers });
         persist();
       } catch {

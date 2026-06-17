@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import React from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
-import { timeLabel } from '@/domain/dates';
+import { dateTimeLabel } from '@/domain/dates';
 import { mealTitle } from '@/domain/nutritionValidation';
 import type { Meal, UserProfile } from '@/domain/types';
 import { HealthScoreBadge } from './HealthScoreBadge';
@@ -55,6 +55,7 @@ export function MealCard({
   showAuthor?: boolean;
 }) {
   const title = mealTitle(meal.foodItems, meal.description);
+  const when = `${MEAL_TYPE_LABELS[meal.mealType]} · ${dateTimeLabel(meal.loggedAt, new Date())}`;
 
   const authorBlock = author ? (
     <>
@@ -64,9 +65,7 @@ export function MealCard({
           {author.displayName}
           {isOwn ? <Text style={{ color: colors.olive }}>  · You</Text> : null}
         </Text>
-        <Text style={type.tiny}>
-          {MEAL_TYPE_LABELS[meal.mealType]} · {timeLabel(meal.loggedAt)}
-        </Text>
+        <Text style={type.tiny}>{when}</Text>
       </View>
     </>
   ) : null;
@@ -94,9 +93,7 @@ export function MealCard({
           )
         ) : (
           <View style={{ flex: 1 }}>
-            <Text style={type.smallBold}>
-              {MEAL_TYPE_LABELS[meal.mealType]} · {timeLabel(meal.loggedAt)}
-            </Text>
+            <Text style={type.smallBold}>{when}</Text>
           </View>
         )}
         {meal.isPrivate ? <Icon name="lock" size={15} color={colors.ink30} accessibilityLabel="Private meal" /> : null}

@@ -54,6 +54,19 @@ export function timeLabel(iso: string): string {
   return `${h}:${m} ${suffix}`;
 }
 
+/** Feed timestamp with date AND time: "Today at 7:42 AM", "Jun 14 at 3:00 PM". */
+export function dateTimeLabel(iso: string, now: Date): string {
+  const key = dayKeyFromIso(iso);
+  let day: string;
+  if (key === dayKey(now)) day = 'Today';
+  else if (key === dayKey(addDays(now, -1))) day = 'Yesterday';
+  else {
+    const date = new Date(iso);
+    day = `${MONTHS[date.getMonth()]} ${date.getDate()}`;
+  }
+  return `${day} at ${timeLabel(iso)}`;
+}
+
 /** Compact relative time for comments/feed: "now", "5m", "3h", "2d", else short date. */
 export function relativeLabel(iso: string, now: Date): string {
   const then = new Date(iso).getTime();
