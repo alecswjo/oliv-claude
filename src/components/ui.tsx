@@ -22,16 +22,19 @@ import { colors, elevation, fonts, motion, radius, spacing, type } from './theme
 
 interface PressScaleProps extends Omit<PressableProps, 'style'> {
   style?: StyleProp<ViewStyle>;
+  /** Style for the outer Pressable itself (e.g. `flex: 1` for layout) —
+   *  `style` only reaches the inner animated view. */
+  containerStyle?: StyleProp<ViewStyle>;
   scaleTo?: number;
   children: React.ReactNode;
 }
 
-export function PressableScale({ style, scaleTo = motion.pressScale, children, ...rest }: PressScaleProps) {
+export function PressableScale({ style, containerStyle, scaleTo = motion.pressScale, children, ...rest }: PressScaleProps) {
   const scale = useRef(new Animated.Value(1)).current;
   const to = (v: number) =>
     Animated.spring(scale, { toValue: v, useNativeDriver: true, speed: 40, bounciness: 0 }).start();
   return (
-    <Pressable onPressIn={() => to(scaleTo)} onPressOut={() => to(1)} {...rest}>
+    <Pressable onPressIn={() => to(scaleTo)} onPressOut={() => to(1)} style={containerStyle} {...rest}>
       <Animated.View style={[{ transform: [{ scale }] }, style]}>{children}</Animated.View>
     </Pressable>
   );

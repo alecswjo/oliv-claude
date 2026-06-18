@@ -62,7 +62,7 @@ export function MealCard({
       <UserAvatar emoji={author.avatarEmoji} color={author.avatarColor} size={36} />
       <View style={{ flex: 1 }}>
         <Text style={type.bodyBold} numberOfLines={1}>
-          {author.displayName}
+          {author.displayName || 'Someone'}
           {isOwn ? <Text style={{ color: colors.olive }}>  · You</Text> : null}
         </Text>
         <Text style={type.tiny}>{when}</Text>
@@ -85,6 +85,7 @@ export function MealCard({
               accessibilityLabel={`View ${author.displayName}'s profile`}
               hitSlop={6}
               onPress={onAuthorPress}
+              containerStyle={{ flex: 1 }}
               style={styles.authorTap}>
               {authorBlock}
             </PressableScale>
