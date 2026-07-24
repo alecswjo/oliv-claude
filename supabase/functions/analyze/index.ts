@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
       .filter((p: unknown): p is { base64: string; mediaType?: string } =>
         typeof (p as { base64?: unknown })?.base64 === 'string')
       .slice(0, MAX_PHOTOS)
-      .map((p) => ({
+      .map((p: { base64: string; mediaType?: string }) => ({
         base64: p.base64,
         mediaType:
           typeof p.mediaType === 'string' && ALLOWED_MEDIA_TYPES.has(p.mediaType)
@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
     if (photos.length === 0 && typeof body.photoBase64 === 'string') {
       photos.push({ base64: body.photoBase64, mediaType: 'image/jpeg' });
     }
-    if (photos.some((p) => p.base64.length > MAX_PHOTO_BASE64_CHARS)) {
+    if (photos.some((p: { base64: string }) => p.base64.length > MAX_PHOTO_BASE64_CHARS)) {
       return json({ error: 'photo too large' }, 413);
     }
     input = {

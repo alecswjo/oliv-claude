@@ -154,6 +154,133 @@ async function analyzeWithOpenAI(input: AnalyzeInput): Promise<RawMealAnalysis> 
   }
 }
 
+/** Anthropic (Claude Opus 4.8) via the Messages API with structured outputs. */
+async function analyzeWithAnthropic(input: AnalyzeInput): Promise<RawMealAnalysis> {
+  const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
+  if (!apiKey) throw new ProviderError('ANTHROPIC_API_KEY is not configured on the server', 500);
+  const model = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-opus-4-8';
+
+  const content: unknown[] = [{ type: 'text', text: userText(input) }];
+  for (const photo of input.photos ?? []) {
+    content.push({
+      type: 'image',
+      source: { type: 'base64', media_type: photo.mediaType, data: photo.base64 },
+    });
+  }
+
+  let res: Response;
+  try {
+    res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 2000,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content }],
+        // Fast extraction task: low effort; thinking stays off by default on
+        // Opus 4.8 when the `thinking` param is omitted.
+        output_config: {
+          effort: 'low',
+          format: { type: 'json_schema', schema: ANALYSIS_JSON_SCHEMA },
+        },
+      }),
+      signal: AbortSignal.timeout(60_000),
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      throw new ProviderError('The analysis provider timed out', 504);
+    }
+    throw new ProviderError('Could not reach the analysis provider', 502);
+  }
+
+  if (!res.ok) {
+    console.error(`Anthropic error ${res.status}: ${(await res.text()).slice(0, 500)}`);
+    if (res.status === 401 || res.status === 403) {
+      throw new ProviderError('The configured Anthropic key was rejected', 500);
+    }
+    throw new ProviderError('The analysis provider returned an error', 502);
+  }
+
+  const json = await res.json();
+  if (json?.stop_reason === 'refusal') {
+    throw new ProviderError('The analysis provider declined this request', 502);
+  }
+  const text: string | undefined = (json?.content ?? []).find(
+    (b: { type: string }) => b.type === 'text',
+  )?.text;
+  if (!text) throw new ProviderError('Anthropic returned no analysis text', 502);
+  try {
+    return JSON.parse(text) as RawMealAnalysis;
+  } catch {
+    throw new ProviderError('Anthropic returned unparseable analysis JSON', 502);
+  }
+}
+
+/** Google Gemini via the Generative Language REST API with a response schema. */
+async function analyzeWithGemini(input: AnalyzeInput): Promise<RawMealAnalysis> {
+  const apiKey = Deno.env.get('GOOGLE_API_KEY');
+  if (!apiKey) throw new ProviderError('GOOGLE_API_KEY is not configured on the server', 500);
+  const model = Deno.env.get('GOOGLE_MODEL') ?? 'gemini-2.5-flash';
+
+  const parts: unknown[] = [{ text: `${SYSTEM_PROMPT}\n\n${userText(input)}` }];
+  for (const photo of input.photos ?? []) {
+    parts.push({ inline_data: { mime_type: photo.mediaType, data: photo.base64 } });
+  }
+
+  // Gemini's responseSchema is an OpenAPI subset: no additionalProperties.
+  const { additionalProperties: _omit, ...geminiSchema } = ANALYSIS_JSON_SCHEMA as Record<
+    string,
+    unknown
+  >;
+
+  let res: Response;
+  try {
+    res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            responseSchema: geminiSchema,
+            maxOutputTokens: 2000,
+          },
+        }),
+        signal: AbortSignal.timeout(60_000),
+      },
+    );
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      throw new ProviderError('The analysis provider timed out', 504);
+    }
+    throw new ProviderError('Could not reach the analysis provider', 502);
+  }
+
+  if (!res.ok) {
+    console.error(`Gemini error ${res.status}: ${(await res.text()).slice(0, 500)}`);
+    if (res.status === 401 || res.status === 403) {
+      throw new ProviderError('The configured Google key was rejected', 500);
+    }
+    throw new ProviderError('The analysis provider returned an error', 502);
+  }
+
+  const json = await res.json();
+  const text: string | undefined = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new ProviderError('Gemini returned no analysis text', 502);
+  try {
+    return JSON.parse(text) as RawMealAnalysis;
+  } catch {
+    throw new ProviderError('Gemini returned unparseable analysis JSON', 502);
+  }
+}
+
 export async function analyze(input: AnalyzeInput): Promise<RawMealAnalysis> {
   if (!input.photos?.length && !input.description?.trim()) {
     throw new ProviderError('Provide a photo or a description', 400);
@@ -162,8 +289,10 @@ export async function analyze(input: AnalyzeInput): Promise<RawMealAnalysis> {
   switch (provider) {
     case 'openai':
       return analyzeWithOpenAI(input);
-    // case 'gemini': return analyzeWithGemini(input);
-    // case 'anthropic': return analyzeWithAnthropic(input);
+    case 'anthropic':
+      return analyzeWithAnthropic(input);
+    case 'gemini':
+      return analyzeWithGemini(input);
     default:
       throw new ProviderError(`Unknown ANALYZE_PROVIDER "${provider}"`, 500);
   }

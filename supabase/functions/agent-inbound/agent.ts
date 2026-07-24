@@ -2,8 +2,10 @@
 // tools, all scoped to the resolved user. userId comes ONLY from the channel
 // identity — tool schemas never accept user ids (docs/AGENT_V0_SPEC.md §8).
 
-import { generateText, stepCountIs, tool } from 'npm:ai@^5.0.0';
+import { generateText, stepCountIs, tool, type LanguageModel } from 'npm:ai@^5.0.0';
 import { createOpenAI } from 'npm:@ai-sdk/openai@^2.0.0';
+import { createAnthropic } from 'npm:@ai-sdk/anthropic@^2.0.0';
+import { createGoogleGenerativeAI } from 'npm:@ai-sdk/google@^2.0.0';
 import { z } from 'npm:zod@^3.25.0';
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { mealTitle, validateAnalysis } from '../../../src/domain/nutritionValidation.ts';
@@ -40,12 +42,36 @@ function dayLabel(key: string, todayKey: string): string {
   return key === todayKey ? 'today' : key;
 }
 
+/**
+ * Provider-pluggable chat model (CHAT_PROVIDER = openai | anthropic | google),
+ * mirroring the analyze function's ANALYZE_PROVIDER pattern. Defaults preserve
+ * current behavior (OpenAI gpt-5.5). Per-provider model overrides:
+ * CHAT_MODEL > provider defaults.
+ */
+type ChatProviderOptions = NonNullable<Parameters<typeof generateText>[0]['providerOptions']>;
+
+function chatModel(): { model: LanguageModel; providerOptions: ChatProviderOptions } {
+  const provider = Deno.env.get('CHAT_PROVIDER') ?? 'openai';
+  const override = Deno.env.get('CHAT_MODEL');
+  if (provider === 'anthropic') {
+    const anthropic = createAnthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') ?? '' });
+    return { model: anthropic(override ?? 'claude-opus-4-8'), providerOptions: {} };
+  }
+  if (provider === 'google') {
+    const google = createGoogleGenerativeAI({ apiKey: Deno.env.get('GOOGLE_API_KEY') ?? '' });
+    return { model: google(override ?? 'gemini-2.5-flash'), providerOptions: {} };
+  }
+  const openai = createOpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') ?? '' });
+  return {
+    model: openai(override ?? Deno.env.get('OPENAI_MODEL') ?? 'gpt-5.5'),
+    providerOptions: { openai: { reasoningEffort: 'low' } },
+  };
+}
+
 export async function runChatTurn(deps: ChatDeps, userText: string): Promise<string> {
   const { admin, userId, profile } = deps;
   const tz = profile.timezone;
   const todayKey = dayKeyInTz(new Date().toISOString(), tz);
-  const openai = createOpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') ?? '' });
-  const model = Deno.env.get('OPENAI_MODEL') ?? 'gpt-5.5';
 
   async function fetchMeals(sinceDays: number) {
     const since = new Date(Date.now() - sinceDays * 86_400_000).toISOString();
@@ -264,8 +290,9 @@ export async function runChatTurn(deps: ChatDeps, userText: string): Promise<str
     content: m.content || '(photo)',
   }));
 
+  const { model, providerOptions } = chatModel();
   const result = await generateText({
-    model: openai(model),
+    model,
     system:
       SYSTEM_PROMPT +
       `\n\nUser: ${deps.profile.displayName}. Timezone: ${tz ?? 'unknown'}. ` +
@@ -275,7 +302,7 @@ export async function runChatTurn(deps: ChatDeps, userText: string): Promise<str
     tools,
     stopWhen: stepCountIs(5),
     maxOutputTokens: 700,
-    providerOptions: { openai: { reasoningEffort: 'low' } },
+    providerOptions,
   });
 
   const text = result.text.trim();
