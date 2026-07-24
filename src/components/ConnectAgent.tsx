@@ -59,6 +59,18 @@ export function ConnectAgent() {
 
   if (!isBackendConfigured() || !AGENT_NUMBER || !profile) return null;
 
+  if (profile.body && profile.body.age < 18) {
+    return (
+      <Card style={{ gap: spacing(2) }}>
+        <Text style={type.heading}>Text your meals</Text>
+        <Text style={type.body}>
+          The texting coach is currently available to adults 18 and older. You can still use every in-app logging
+          and progress feature.
+        </Text>
+      </Card>
+    );
+  }
+
   const privacyLine = profile.defaultPrivate
     ? 'Meals you text will stay private unless you share them.'
     : 'Heads up: meals you text will post to your feed for followers (your "Private by default" setting is off).';

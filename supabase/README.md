@@ -13,7 +13,11 @@ supabase/
                                   security-invoker profile_stats, reports/blocks,
                                   analyze_usage, bucket size/MIME limits
   migrations/0005_analyze_quota.sql bump_analyze_usage() (service-role only)
-  functions/analyze/              POST proxy → OpenAI gpt-5.5 (quota + caps + timeout)
+  functions/analyze/              POST proxy → configured LLM (quota + caps + timeout)
+  functions/agent-inbound/        Sendblue webhook → texting coach + meal capture
+  functions/agent-analyze/        internal signed meal-analysis endpoint
+  functions/agent-recap/          opt-in local-time daily recaps
+  functions/revenuecat-webhook/   subscription lifecycle → entitlement mirror
   functions/delete-account/       POST — purges storage + deletes the auth user
 ```
 
@@ -69,16 +73,49 @@ For native deep-link redirects, add the app scheme to dashboard →
 ## 3. Analysis proxy (the server-side key)
 
 ```bash
-supabase secrets set OPENAI_API_KEY=sk-...        # required — never goes in the app
-supabase secrets set OPENAI_MODEL=gpt-5.5         # optional (default gpt-5.5)
+supabase secrets set ANALYZE_PROVIDER=openai
+supabase secrets set OPENAI_API_KEY=sk-...        # never goes in the app
+supabase secrets set OPENAI_MODEL=gpt-5.5
 supabase functions deploy analyze
 supabase functions deploy delete-account
 ```
 
-The function authenticates the caller via their Supabase JWT, calls OpenAI with
-the server-side key, and returns a normalized `MealAnalysis`. To add another
-provider later, implement it in `functions/analyze/providers.ts` and set
-`ANALYZE_PROVIDER`.
+The function authenticates the caller via their Supabase JWT, calls the
+configured provider, and returns a normalized `MealAnalysis`. Anthropic and
+Google are implemented too; set `ANALYZE_PROVIDER`, the matching server key,
+and model. Text chat uses `CHAT_PROVIDER` and `CHAT_MODEL`.
+
+### Texting agent
+
+Use distinct secrets for every trust boundary:
+
+```bash
+supabase secrets set SENDBLUE_WEBHOOK_SECRET=<sendblue-webhook-secret>
+supabase secrets set AGENT_SECRET=<random-internal-secret>
+supabase secrets set SENDBLUE_API_KEY=<key> SENDBLUE_API_SECRET=<secret>
+supabase secrets set SENDBLUE_FROM_NUMBER=<e164>
+supabase functions deploy agent-analyze --no-verify-jwt
+supabase functions deploy agent-inbound --no-verify-jwt
+supabase functions deploy agent-recap --no-verify-jwt
+```
+
+Configure Sendblue's webhook without a query secret:
+`https://<ref>.supabase.co/functions/v1/agent-inbound`. Sendblue supplies the
+configured secret in the `sb-signing-secret` header.
+
+### Subscriptions
+
+Create the `pro` entitlement and monthly current offering in RevenueCat, then:
+
+```bash
+supabase secrets set REVENUECAT_WEBHOOK_AUTH=<long-random-value>
+supabase secrets set REVENUECAT_ENTITLEMENT_ID=pro
+supabase functions deploy revenuecat-webhook --no-verify-jwt
+```
+
+Set RevenueCat's webhook Authorization header to the exact secret. Verify
+sandbox purchase, renewal, expiration, restore, and Apple offer-code events
+before setting `REQUIRE_ACTIVE_SUBSCRIPTION=true` on the agent.
 
 ## 4. Point the app at it
 
@@ -86,7 +123,8 @@ In the repo root, copy `.env.example` → `.env` and fill in
 `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` (dashboard →
 Project Settings → API). Restart `npx expo start`. The app now requires sign-in,
 stores meals/profile/photos on the server, and routes every analysis through the
-proxy. Unset those two vars and it reverts to local/offline mode.
+proxy. Add the RevenueCat public SDK keys to enable the paywall. Unset the
+Supabase variables and it reverts to local/offline mode.
 
 ## Smoke test the proxy directly
 

@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "codex/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: App checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Expo dependencies
+        run: npx expo-doctor
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test -- --runInBand
+
+      - name: Export every web route
+        run: npx expo export --platform web
+
+      - name: Reject unresolved merge markers
+        run: |
+          if git grep -nE '^(<{7}|={7}|>{7})' -- ':!package-lock.json'; then
+            echo "Unresolved merge marker found."
+            exit 1
+          fi
+
+      - name: Fail on critical runtime advisories
+        run: npm audit --omit=dev --audit-level=critical
+
+  edge-functions:
+    name: Edge function checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: supabase/functions
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Typecheck edge functions
+        run: >-
+          deno check
+          analyze/index.ts
+          agent-analyze/index.ts
+          agent-inbound/index.ts
+          agent-recap/index.ts
+          delete-account/index.ts
+          notify/index.ts
+          revenuecat-webhook/index.ts

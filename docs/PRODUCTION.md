@@ -8,9 +8,9 @@ built vs. what remains before real users.
 | Concern | Local/offline mode (default) | Backend mode (`.env` configured + signed in) |
 |---|---|---|
 | Meals, profile, social | Zustand → AsyncStorage (on device) | **Postgres** (Supabase) |
-| Meal photos | file URI in app documents dir | **Supabase Storage** (`meal-photos` bucket, public-read) |
-| Accounts/auth | local generated profile id | **Supabase Auth** (email; Apple = next) |
-| AI key | user-pasted, on device (demo) | **server-side** env var on the Edge Function |
+| Meal photos | file URI in app documents dir | **Supabase Storage** (private bucket + viewer-authorized signed URLs) |
+| Accounts/auth | local generated profile id | **Supabase Auth** (email, Google, native Apple; provider configuration required) |
+| AI key | deterministic offline estimator | **server-side** provider keys on Edge Functions |
 | Social feed | seeded demo PRNG | DB query over real follows (data layer ready) |
 | Privacy enforcement | client filter | **Row-Level Security** in Postgres |
 
@@ -21,11 +21,11 @@ is exactly the original offline build.
 
 ## The server-side key (every call uses your key)
 
-- `supabase/functions/analyze/` — an Edge Function that verifies the caller's
-  Supabase JWT, calls **OpenAI gpt-5.5** with the **server-side** `OPENAI_API_KEY`,
-  and returns a `MealAnalysis`. The key never ships in the app binary.
-- Provider-pluggable: add Gemini/Anthropic in `providers.ts` and flip
-  `ANALYZE_PROVIDER`. Model is `OPENAI_MODEL` (default `gpt-5.5`).
+- `supabase/functions/analyze/` verifies the caller's Supabase JWT, calls the
+  configured provider with a **server-side** key, and returns a
+  `MealAnalysis`. Provider keys never ship in the app binary.
+- Analysis supports `ANALYZE_PROVIDER=openai|anthropic|google`; texting chat
+  independently supports the same providers via `CHAT_PROVIDER`.
 - Client: `ProxyMealAnalyzer` (`src/services/analyzer/proxyAnalyzer.ts`) is the
   top analyzer in the precedence `proxy → offline estimator`.
   Any AI failure still falls back to the deterministic estimator.
@@ -42,7 +42,8 @@ is exactly the original offline build.
   sign-in, hydrates profile + meals on launch.
 - **Write-through sync**: own meals, profile, olives/comments, photo upload mirror
   to Supabase when signed in (`src/services/sync.ts`), gated + non-blocking.
-- 291 unit tests pass; `tsc` strict clean; full Metro bundle clean.
+- Text-first onboarding, agent linking/memory/recaps, signed private photos,
+  an owner dashboard, and RevenueCat subscription surfaces are also built.
 
 ## What remains for real users (gap analysis)
 
@@ -60,19 +61,16 @@ is exactly the original offline build.
   privacy manifest + export-compliance keys, eas.json, opaque app icon.
 
 **Still open**
-- Social graph over the DB (data layer ready; Feed/Discover/profiles still
-  render seeded demo data — wire `repo.fetchFeed/fetchDiscover/fetchStats`).
 - Apple provider credentials in the Supabase dashboard (Services ID/key) and
   Google OAuth production consent screen; reviewer demo account.
 - Host the privacy policy at a public URL for App Store Connect metadata.
-- Image/comment moderation tooling beyond report+block (a review queue).
-- Signed URLs (or per-meal ACL) for photos of private meals — the bucket is
-  public-read; uuid paths are unguessable but links are shareable.
-- Crash reporting (Sentry), analytics, APNs push, CI/CD, designed icon set.
+- Moderation actions and audit history beyond the read-only report queue.
+- Crash reporting, privacy-safe analytics, APNs production validation, and CI.
+- App Store Connect/RevenueCat product, trial, offer-code, and webhook setup.
 - Multi-device conflict policy beyond last-write-wins (updated_at guard,
   tombstones for deletes).
 
 ## Deploy
 
-See `supabase/README.md` for the four steps (db push → enable auth → set
-`OPENAI_API_KEY` + deploy function → set `.env`).
+See `supabase/README.md` for database, auth, provider, agent, subscription, and
+app configuration.

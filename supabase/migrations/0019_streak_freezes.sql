@@ -26,6 +26,8 @@ set search_path = public
 as $$
 declare
   v_uid uuid;
+  v_timezone text;
+  v_today date;
 begin
   if auth.role() = 'service_role' then
     v_uid := p_user_id;
@@ -34,12 +36,36 @@ begin
     v_uid := auth.uid();
   end if;
   if v_uid is null then return json_build_object('status', 'invalid'); end if;
-  -- Only recent misses are repairable — no rewriting ancient history.
-  if p_day is null or p_day > current_date or p_day < current_date - 3 then
+  select timezone into v_timezone from profiles where id = v_uid;
+  v_today := (now() at time zone coalesce(v_timezone, 'UTC'))::date;
+
+  -- Only yesterday is repairable, in the user's own timezone. The day before
+  -- must actually continue a meal/freeze run; callers cannot mint arbitrary
+  -- recent history by bypassing the app/agent's preview calculation.
+  if p_day is null or p_day <> v_today - 1 then
     return json_build_object('status', 'invalid');
   end if;
   if exists (select 1 from streak_freezes where user_id = v_uid and day = p_day) then
     return json_build_object('status', 'already_covered');
+  end if;
+  if exists (
+    select 1 from meals
+    where user_id = v_uid
+      and (logged_at at time zone coalesce(v_timezone, 'UTC'))::date = p_day
+  ) then
+    return json_build_object('status', 'already_covered');
+  end if;
+  if not (
+    exists (
+      select 1 from meals
+      where user_id = v_uid
+        and (logged_at at time zone coalesce(v_timezone, 'UTC'))::date = p_day - 1
+    )
+    or exists (
+      select 1 from streak_freezes where user_id = v_uid and day = p_day - 1
+    )
+  ) then
+    return json_build_object('status', 'invalid');
   end if;
   if exists (
     select 1 from streak_freezes

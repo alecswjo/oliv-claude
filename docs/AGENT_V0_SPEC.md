@@ -151,7 +151,9 @@ RLS: users select/delete their own `channel_identities` + `agent_messages` (see 
 3. **Terminology:** Oliv the agent is an **AI nutrition coach** — never "dietitian/dietician" in user-facing copy until clinical/legal review. v0 advice stays within: logging, corrections, factual totals/trends, neutral observations, general food suggestions, explicit uncertainty.
 4. **18+:** the app allows 13+; the *agent* doesn't yet. Linking requires 18+ (checkbox at link time; body-profile age gates it too when present). Revisit with minor-safety review.
 5. **Deterministic scope guards before the model:** a small classifier/regex layer intercepts medication, eating-disorder, pregnancy/disease-specific, and crash-diet requests → fixed compassionate copy + professional-help pointers. Not left to the system prompt alone.
-6. **Photo bucket** stays public-read for friends-family testers **and is a hard blocker before any external tester**: private bucket + `can_view_meal`-derived signed URLs (tracked, not in this build). Reviewer's stricter position noted; Alec accepts tester-scope risk.
+6. **Photo bucket is private** (migration 0017). The app mints short-lived
+   signed URLs only when storage RLS can resolve the embedded meal id and
+   `can_view_meal()` allows the caller.
 7. **Retention:** account deletion cascades all agent rows; disconnect keeps history until deletion (shown in-app); Sendblue/OpenAI processing disclosed on the linking screen before first use; raw `media_url`s are fetched then discarded (photos live only in Oliv storage).
 
 ## 8. Service-role discipline (enforced in code, not prompts)
@@ -165,7 +167,8 @@ RLS: users select/delete their own `channel_identities` + `agent_messages` (see 
 
 The v0.1 design (shared-secret check inside `analyze` with `verify_jwt` on) was invalid — Supabase's platform JWT check runs **before** function code. Correct shape, precedent `notify`:
 
-- New function `agent-analyze`, deployed `--no-verify-jwt`; auth = `x-agent-secret` (+ timestamp guard) exactly like `notify`.
+- New function `agent-analyze`, deployed `--no-verify-jwt`; auth =
+  constant-time comparison of the internal `x-agent-secret`.
 - Body includes server-resolved `userId`; runs `bump_analyze_usage(userId)` and all existing input caps.
 - **Shares `providers.ts` verbatim** (import from `../analyze/providers.ts`) — one prompt, one schema, one OpenAI key. `analyze` (user-JWT) is untouched.
 
@@ -226,4 +229,7 @@ Sendblue Free Sandbox **$0** (10 verified testers; → $100/mo AI Agent tier onl
 
 ## 16. Deferred (v1 seeds)
 
-Private photo bucket + signed URLs (**blocker before external testers**) · proactive check-ins/recaps (consent UX + quiet hours) · text-first signup · Supabase Realtime · voice memos · USDA grounding + correction memory · minor-safety review to open <18 · RD review of coaching copy · Linq evaluation at scale (Poke-proven, hundreds of lines) · Apple Messages for Business.
+Quiet-hour and frequency controls for proactive recaps · voice memos · USDA
+grounding + repeat-meal/correction memory · minor-safety review to open texting
+below 18 · RD review of coaching copy · Apple Messages for Business ·
+production observability and fault-injection tests.

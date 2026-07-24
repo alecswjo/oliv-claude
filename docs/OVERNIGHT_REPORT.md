@@ -4,8 +4,11 @@
 
 ## Verified state at last checkpoint
 
-- **362 Jest tests passing**, `tsc` clean, `deno check` clean on all 7 edge functions.
-- 3 commits from this lane: `e9c8ead` (multi-provider), `821a551` (P0/P1 hardening), `9d4b8ad` (streaks + coupons). The Codex session had ~11 files still uncommitted when I last looked (design/paywall/admin polish in flight).
+- **362 Jest tests passing**, `tsc` clean, Expo Doctor 21/21, full web
+  export clean, and `deno check` clean on all 7 edge functions.
+- The app/UI tail, dependency alignment, CI, and final product audit are now
+  complete on the same branch. See `docs/PRODUCT_AUDIT_2026-07-23.md` for the
+  current launch assessment rather than relying on this historical lane report.
 
 ## What this lane shipped
 
@@ -39,7 +42,7 @@ The review report's highlights and what happened to each:
 - Agent tools: `get_streak` (current streak, next milestone, repairable day) and `use_streak_save` (after user consent). The evening-nudge/celebration UI is wired for the Codex lane via `repo.fetchStreakFreezes`.
 
 ### 4. Coupon codes for friends (0020)
-`coupon_codes` + `redeem_coupon(code)` — comped Pro that writes the same `subscriptions` mirror the paywall reads (never downgrades a longer entitlement). Mint via admin/SQL: `insert into coupon_codes (code, duration_days, max_redemptions) values ('FRIENDS2026', 90, 20);` App hook: `repo.redeemCoupon` (UI field on the paywall is a 10-minute wire-up).
+`coupon_codes` + `redeem_coupon(code)` provides an optional backend comp-grant path and now preserves longer or non-expiring entitlements. It is intentionally **not wired into the public paywall**: the client reads RevenueCat while the agent gate reads the subscription mirror, so a custom grant needs reconciliation before it is a complete product flow. Apple's native subscription offer codes are the recommended launch path and are wired into the paywall.
 
 ### 5. Texting features
 - **Daily recap** (opt-in): "turn on my daily recap" → `set_daily_recap` tool; hourly cron (0016) → `agent-recap` function sends a deterministic, template-based day summary at the user's chosen local hour (no LLM — instant, never hallucinates numbers). Respects the once-per-day dedupe and the user's timezone.
@@ -48,8 +51,8 @@ The review report's highlights and what happened to each:
 ### 6. Research deliverable
 The competitive brief (Cal AI onboarding/paywall machine, Poke Fit texting patterns, Illume's 3-part insight frame, MFP streak mechanics + 2026 onboarding literature) with a ranked top-20 recommendation list is preserved in my session output — the streak/recap features above implement recs #2, #5, #12; the quiz-onboarding, paywall-timeline, and running-budget-reply recs are the highest-value ones still open.
 
-## Codex lane (observed, not mine to grade)
-Webhook header auth (`sb-signing-secret` + constant-time compare), text-first onboarding screens (`text-setup`), design-token and component work (theme, ui, MealCard, CoachCard, TextThreadPreview), in-app admin dashboard (`/admin` + `app_admins` table, 0015), RevenueCat integration (purchases service, subscription store, paywall screen, `revenuecat-webhook` function, 0018), memory screen/services. Its last edits were uncommitted when I wrote this.
+## App/UI and release-hardening lane
+Webhook header auth (`sb-signing-secret` + constant-time compare), text-first onboarding screens (`text-setup`), design-token and component work (theme, ui, MealCard, CoachCard, TextThreadPreview), in-app admin dashboard (`/admin` + `app_admins` table, 0015), RevenueCat integration (purchases service, subscription store, paywall screen, `revenuecat-webhook` function, 0018), memory screen/services, SDK dependency alignment, and CI are complete on this branch.
 
 ## ⚠️ Deploy runbook (when you approve the merge — nothing below is done yet)
 
@@ -62,7 +65,8 @@ Webhook header auth (`sb-signing-secret` + constant-time compare), text-first on
 7. Smoke test after deploy: `node scripts/agent-smoke.mjs` (now header-auth: pass `WEBHOOK_SECRET`).
 
 ## Decisions for you this morning
-1. **Merge `codex/text-first-production` → main?** My lane is fully tested; review the Codex lane's uncommitted tail first (paywall/design/text-setup).
-2. **Paywall timing/pricing** (research says: soft paywall after plan-reveal + first scan; 3-day trial → annual anchor ~$29–49/yr; Poke charges $19/mo) — nothing is gated yet; all gating hooks read the `subscriptions` table.
+1. **Merge `codex/text-first-production` → main?** The full joint branch is
+   tested and ready for review; it has not been deployed.
+2. **Paywall timing/pricing** (research says: soft paywall after plan-reveal + first scan; 3-day trial → annual anchor ~$29–49/yr; Poke charges $19/mo) — the in-app paywall is wired to RevenueCat and the agent can optionally gate against its server mirror. Leave `REQUIRE_ACTIVE_SUBSCRIPTION` off until the sandbox webhook lifecycle is verified.
 3. **Provider switch?** Flipping `CHAT_PROVIDER=anthropic` (Claude Opus 4.8) is a one-secret change if you want to compare the coach's voice.
 4. Open review items above (notably deterministic delete confirmation and split quota counters) — none block the pilot.

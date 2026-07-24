@@ -72,7 +72,11 @@ begin
   )
   on conflict (user_id, entitlement_id) do update set
     -- Never downgrade a longer-lived entitlement with a shorter comp.
-    expires_at = greatest(coalesce(subscriptions.expires_at, 'epoch'::timestamptz), excluded.expires_at),
+    expires_at = case
+      -- Null expiry on an active store entitlement means non-expiring access.
+      when subscriptions.status = 'active' and subscriptions.expires_at is null then null
+      else greatest(coalesce(subscriptions.expires_at, 'epoch'::timestamptz), excluded.expires_at)
+    end,
     status = 'active',
     last_event_type = 'COUPON_REDEEMED',
     last_event_at = now(),
