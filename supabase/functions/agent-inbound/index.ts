@@ -363,9 +363,13 @@ Deno.serve(async (req) => {
 
   const work = (async () => {
     try {
-      if (!identity) return await handleUnknown(db, env);
-      if (identity.status !== 'active') {
-        return await reply(db, env, null, REVOKED_SENDER_REPLY, `revoked:${env.externalMessageId}`);
+      if (!identity || identity.status !== 'active') {
+        // A revoked sender texting LINK is *relinking* — that must reach the
+        // consume flow, not bounce off the disconnect message.
+        if (identity && !parseLinkCommand(env.text)) {
+          return await reply(db, env, null, REVOKED_SENDER_REPLY, `revoked:${env.externalMessageId}`);
+        }
+        return await handleUnknown(db, env);
       }
       const userId = identity.user_id as string;
       await db.from('agent_messages').update({ user_id: userId }).eq('id', messageRowId);
