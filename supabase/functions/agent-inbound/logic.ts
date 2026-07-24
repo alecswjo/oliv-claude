@@ -9,6 +9,8 @@ export interface MessageEnvelope {
   provider: 'sendblue';
   externalMessageId: string;
   externalSenderId: string; // E.164
+  /** The Oliv line the user texted — replies must go out from this number. */
+  lineNumber: string | null;
   text: string;
   mediaUrls: string[];
 }
@@ -32,10 +34,14 @@ export function normalizeSendblue(payload: Record<string, unknown>): MessageEnve
   const media = typeof payload.media_url === 'string' && payload.media_url ? [payload.media_url] : [];
   const text = typeof payload.content === 'string' ? payload.content.trim() : '';
   if (!text && media.length === 0) return null;
+  const line = typeof payload.to_number === 'string' && payload.to_number.startsWith('+')
+    ? payload.to_number
+    : null;
   return {
     provider: 'sendblue',
     externalMessageId: handle,
     externalSenderId: from,
+    lineNumber: line,
     text,
     mediaUrls: media,
   };

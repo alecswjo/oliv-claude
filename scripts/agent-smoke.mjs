@@ -111,9 +111,12 @@ async function main() {
   console.log('— photo webhook → analyzed meal (this calls OpenAI; ~15-30s)');
   // Any public food-photo URL works; a bucket upload keeps the test self-contained.
   const imgRes = await fetch(
-    'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Good_Food_Display_-_NCI_Visuals_Online.jpg/640px-Good_Food_Display_-_NCI_Visuals_Online.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/6/6d/Good_Food_Display_-_NCI_Visuals_Online.jpg',
+    { headers: { 'user-agent': 'oliv-agent-smoke/1.0 (agent pipeline test)' } },
   );
+  if (!imgRes.ok) throw new Error(`fixture image fetch failed: ${imgRes.status}`);
   const imgBytes = new Uint8Array(await imgRes.arrayBuffer());
+  if (!(imgBytes[0] === 0xff && imgBytes[1] === 0xd8)) throw new Error('fixture is not a JPEG');
   const fixturePath = `${userId}/smoke-fixture.jpg`;
   await db.storage.from('meal-photos').upload(fixturePath, imgBytes, {
     contentType: 'image/jpeg',
@@ -149,14 +152,24 @@ async function main() {
   assert(withChat.length === 2, `chat tool logged a second meal (got ${withChat.length})`);
 
   console.log('— run states');
-  const { data: runs } = await db.from('agent_runs').select('state').eq('user_id', userId);
-  console.log(`  run states: ${(runs ?? []).map((r) => r.state).join(', ') || '(none)'}`);
+  const { data: runs } = await db
+    .from('agent_runs')
+    .select('state, retry_count, last_error')
+    .eq('user_id', userId);
+  for (const r of runs ?? []) {
+    console.log(`  run: ${r.state}${r.last_error ? ` — ${r.last_error.slice(0, 300)}` : ''}`);
+  }
   const { data: outbound } = await db
     .from('agent_messages')
     .select('content')
     .eq('user_id', userId)
     .eq('direction', 'out');
   console.log(`  outbound replies logged: ${(outbound ?? []).length}`);
+
+  if (failures > 0) {
+    console.log(`\nSMOKE FAIL (${failures}) — leaving test data in place for inspection (user ${userId})`);
+    process.exit(1);
+  }
 
   console.log('— cleanup');
   await db.storage.from('meal-photos').remove([

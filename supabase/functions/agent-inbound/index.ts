@@ -56,7 +56,7 @@ function ok(body: Record<string, unknown> = { ok: true }): Response {
 /** Retry-safe outbound send: one send per (sender, clientRef), logged. */
 async function reply(
   db: SupabaseClient,
-  env: { externalSenderId: string },
+  env: { externalSenderId: string; lineNumber: string | null },
   userId: string | null,
   content: string,
   clientRef: string,
@@ -67,7 +67,7 @@ async function reply(
     .eq('client_ref', clientRef)
     .maybeSingle();
   if (existing) return;
-  await sendMessage(env.externalSenderId, content);
+  await sendMessage(env.externalSenderId, content, env.lineNumber);
   await db.from('agent_messages').insert({
     provider: 'sendblue',
     external_sender_id: env.externalSenderId,
@@ -218,7 +218,11 @@ async function normalizePhoto(bytes: Uint8Array): Promise<{ bytes: Uint8Array; m
   throw new PhotoFormatError();
 }
 
-class PhotoFormatError extends Error {}
+class PhotoFormatError extends Error {
+  constructor() {
+    super('unsupported photo format');
+  }
+}
 
 function toBase64(bytes: Uint8Array): string {
   let binary = '';
@@ -329,7 +333,7 @@ Deno.serve(async (req) => {
             p_urls: env.mediaUrls,
           });
         }
-        if (opened) await sendTyping(env.externalSenderId);
+        if (opened) await sendTyping(env.externalSenderId, env.lineNumber);
 
         const run = await claimRun(db, runId);
         if (!run) return; // another invocation owns the close
@@ -441,7 +445,7 @@ Deno.serve(async (req) => {
       if (guarded) {
         return await reply(db, env, userId, guarded, `guard:${env.externalMessageId}`);
       }
-      await sendTyping(env.externalSenderId);
+      await sendTyping(env.externalSenderId, env.lineNumber);
       const { data: historyRows } = await db
         .from('agent_messages')
         .select('direction, content')

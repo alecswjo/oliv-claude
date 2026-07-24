@@ -11,12 +11,17 @@ function headers(): Record<string, string> {
   };
 }
 
-/** Send a single text message. Sendblue queues at 1 msg/sec per line. */
-export async function sendMessage(number: string, content: string): Promise<void> {
+/**
+ * Send a single text message. Sendblue queues at 1 msg/sec per line.
+ * `from_number` is required by the API (which line to send from): prefer the
+ * line the user texted, falling back to the configured default.
+ */
+export async function sendMessage(number: string, content: string, fromNumber?: string | null): Promise<void> {
+  const from = fromNumber ?? Deno.env.get('SENDBLUE_FROM_NUMBER') ?? undefined;
   const res = await fetch(`${API_BASE}/send-message`, {
     method: 'POST',
     headers: headers(),
-    body: JSON.stringify({ number, content }),
+    body: JSON.stringify({ number, content, ...(from ? { from_number: from } : {}) }),
     signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) {
@@ -25,12 +30,13 @@ export async function sendMessage(number: string, content: string): Promise<void
 }
 
 /** Best-effort typing indicator (the <2s ack). Never throws. */
-export async function sendTyping(number: string): Promise<void> {
+export async function sendTyping(number: string, fromNumber?: string | null): Promise<void> {
   try {
+    const from = fromNumber ?? Deno.env.get('SENDBLUE_FROM_NUMBER') ?? undefined;
     const res = await fetch(`${API_BASE}/send-typing-indicator`, {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ number }),
+      body: JSON.stringify({ number, ...(from ? { from_number: from } : {}) }),
       signal: AbortSignal.timeout(5_000),
     });
     if (!res.ok) console.warn('sendblue typing failed', res.status);

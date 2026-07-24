@@ -35,6 +35,7 @@ describe('normalizeSendblue', () => {
       provider: 'sendblue',
       externalMessageId: 'mh-1',
       externalSenderId: '+14085551234',
+      lineNumber: '+13054098546',
       text: 'hello',
       mediaUrls: [],
     });
