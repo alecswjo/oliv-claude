@@ -34,7 +34,8 @@ import {
 } from './logic.ts';
 import { fetchMedia, sendMessage, sendTyping } from './sendblue.ts';
 import { callAgentAnalyze, commitMeal, sha256Hex, uploadPhoto } from './ops.ts';
-import { runChatTurn } from './agent.ts';
+// NOTE: agent.ts (AI SDK + zod) is dynamically imported only on chat turns —
+// keeping it out of the boot path cuts cold-start for the photo pipeline.
 
 const DEBOUNCE_MS = 3_000;
 const RUN_HARD_CAP_MS = 20_000;
@@ -205,22 +206,65 @@ async function claimRun(db: SupabaseClient, runId: string): Promise<RunRow | nul
   return null;
 }
 
-async function normalizePhoto(bytes: Uint8Array): Promise<{ bytes: Uint8Array; mediaType: string }> {
+/**
+ * HEIC → JPEG without burning function CPU: park the raw bytes in the private
+ * agent-scratch bucket and read them back through Storage's image
+ * transformation (imgproxy decodes HEIC natively). In-function wasm conversion
+ * was killed by the CPU cap on real 12MP iPhone photos.
+ */
+async function convertHeicViaStorage(db: SupabaseClient, bytes: Uint8Array): Promise<Uint8Array> {
+  const path = `tmp/${crypto.randomUUID()}.heic`;
+  const { error } = await db.storage
+    .from('agent-scratch')
+    .upload(path, bytes.slice().buffer as ArrayBuffer, { contentType: 'image/heic', upsert: true });
+  if (error) throw new Error(`scratch upload failed: ${error.message}`);
+  try {
+    const url =
+      `${Deno.env.get('SUPABASE_URL')}/storage/v1/render/image/authenticated/agent-scratch/${path}` +
+      `?width=1280&quality=80`;
+    // The authenticated render endpoint validates a JWT — the auto-injected
+    // SUPABASE_SERVICE_ROLE_KEY may be the new sb_secret_ format, so prefer
+    // the explicitly configured legacy JWT (secret SERVICE_ROLE_JWT).
+    const renderKey =
+      Deno.env.get('SERVICE_ROLE_JWT') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${renderKey}`, Accept: 'image/jpeg' },
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) {
+      throw new PhotoFormatError(`render ${res.status}: ${(await res.text()).slice(0, 120)}`);
+    }
+    const out = new Uint8Array(await res.arrayBuffer());
+    if (!(out[0] === 0xff && out[1] === 0xd8)) {
+      throw new PhotoFormatError(
+        `render returned ${res.headers.get('content-type')} first-bytes=${[...out.slice(0, 4)].join(',')}`,
+      );
+    }
+    return out;
+  } finally {
+    await db.storage.from('agent-scratch').remove([path]).catch(() => {});
+  }
+}
+
+async function normalizePhoto(
+  db: SupabaseClient,
+  bytes: Uint8Array,
+): Promise<{ bytes: Uint8Array; mediaType: string }> {
   const kind = sniffImage(bytes);
   if (kind === 'jpeg') return { bytes, mediaType: 'image/jpeg' };
   if (kind === 'png') return { bytes, mediaType: 'image/png' };
   if (kind === 'webp') return { bytes, mediaType: 'image/webp' };
   if (kind === 'heic') {
-    const { default: convert } = await import('npm:heic-convert@^2.1.0');
-    const out = await convert({ buffer: bytes.slice().buffer, format: 'JPEG', quality: 0.82 });
-    return { bytes: new Uint8Array(out as ArrayBuffer), mediaType: 'image/jpeg' };
+    return { bytes: await convertHeicViaStorage(db, bytes), mediaType: 'image/jpeg' };
   }
-  throw new PhotoFormatError();
+  throw new PhotoFormatError(
+    `sniff unknown: len=${bytes.length} first-bytes=${[...bytes.slice(0, 12)].join(',')}`,
+  );
 }
 
 class PhotoFormatError extends Error {
-  constructor() {
-    super('unsupported photo format');
+  constructor(detail = '') {
+    super(`unsupported photo format${detail ? `: ${detail}` : ''}`);
   }
 }
 
@@ -255,33 +299,43 @@ Deno.serve(async (req) => {
 
   const db = admin();
 
-  // Idempotent inbound log — a duplicate delivery ends here.
-  const { data: inserted, error: insErr } = await db
-    .from('agent_messages')
-    .insert({
-      provider: env.provider,
-      external_message_id: env.externalMessageId,
-      external_sender_id: env.externalSenderId,
-      direction: 'in',
-      content: env.text || null,
-      media_count: env.mediaUrls.length,
-    })
-    .select('id')
-    .maybeSingle();
+  // Idempotent inbound log + identity resolve, in parallel — the identity is
+  // what gates the instant typing ack, so it must not wait behind anything.
+  const [insertRes, identityRes] = await Promise.all([
+    db
+      .from('agent_messages')
+      .insert({
+        provider: env.provider,
+        external_message_id: env.externalMessageId,
+        external_sender_id: env.externalSenderId,
+        direction: 'in',
+        content: env.text || null,
+        media_count: env.mediaUrls.length,
+      })
+      .select('id')
+      .maybeSingle(),
+    db
+      .from('channel_identities')
+      .select('user_id, status')
+      .eq('provider', env.provider)
+      .eq('external_sender_id', env.externalSenderId)
+      .maybeSingle(),
+  ]);
+  const { data: inserted, error: insErr } = insertRes;
   if (insErr) {
     if (insErr.code === '23505') return ok({ ignored: 'duplicate' });
     console.error('message log failed', insErr);
     return ok({ ignored: 'log-error' });
   }
   const messageRowId = inserted!.id as string;
+  const identity = identityRes.data;
 
-  // Resolve the sender.
-  const { data: identity } = await db
-    .from('channel_identities')
-    .select('user_id, status')
-    .eq('provider', env.provider)
-    .eq('external_sender_id', env.externalSenderId)
-    .maybeSingle();
+  // Instant ack: typing bubble fires before any further work (fire-and-forget;
+  // kept alive by the waitUntil below). LINK commands get a reply, not typing.
+  const typingAck =
+    identity?.status === 'active' && !parseLinkCommand(env.text)
+      ? sendTyping(env.externalSenderId, env.lineNumber)
+      : Promise.resolve();
 
   const work = (async () => {
     try {
@@ -333,8 +387,6 @@ Deno.serve(async (req) => {
             p_urls: env.mediaUrls,
           });
         }
-        if (opened) await sendTyping(env.externalSenderId, env.lineNumber);
-
         const run = await claimRun(db, runId);
         if (!run) return; // another invocation owns the close
 
@@ -362,7 +414,7 @@ Deno.serve(async (req) => {
           const uploadBytes: Uint8Array[] = [];
           for (const mediaUrl of urls) {
             const raw = await fetchMedia(mediaUrl);
-            const norm = await normalizePhoto(raw);
+            const norm = await normalizePhoto(db, raw);
             photos.push({ base64: toBase64(norm.bytes), mediaType: norm.mediaType });
             uploadBytes.push(norm.bytes);
           }
@@ -445,7 +497,6 @@ Deno.serve(async (req) => {
       if (guarded) {
         return await reply(db, env, userId, guarded, `guard:${env.externalMessageId}`);
       }
-      await sendTyping(env.externalSenderId, env.lineNumber);
       const { data: historyRows } = await db
         .from('agent_messages')
         .select('direction, content')
@@ -457,6 +508,7 @@ Deno.serve(async (req) => {
         .reverse()
         .map((m) => ({ direction: m.direction as 'in' | 'out', content: (m.content as string) ?? '' }));
 
+      const { runChatTurn } = await import('./agent.ts');
       const text = await runChatTurn(
         {
           admin: db,
@@ -488,10 +540,11 @@ Deno.serve(async (req) => {
     }
   })();
 
-  // Respond to Sendblue immediately; the pipeline continues in background.
+  // Respond to Sendblue immediately; typing ack + pipeline continue in background.
+  const background = Promise.allSettled([typingAck, work]);
   // @ts-ignore EdgeRuntime is provided by the Supabase Edge runtime.
-  if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(work);
-  else await work;
+  if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(background);
+  else await background;
   return ok();
 });
 
