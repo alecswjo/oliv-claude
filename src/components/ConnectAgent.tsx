@@ -1,9 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'expo-router';
 import { Linking, Platform, StyleSheet, Text, View } from 'react-native';
 import { AGENT_NUMBER, agentContactCardUrl, isBackendConfigured } from '@/config';
 import { Button, Card } from '@/components/ui';
 import { colors, spacing, type } from '@/components/theme';
-import { fetchAgentLink, mintAgentLinkToken, revokeAgentLink, type AgentLink } from '@/services/agentLink';
+import {
+  fetchAgentLink,
+  mintAgentLinkToken,
+  openAgentThread,
+  revokeAgentLink,
+  type AgentLink,
+} from '@/services/agentLink';
 import { confirmAction } from '@/services/confirm';
 import { showToast } from '@/store/toastStore';
 import { useUserStore } from '@/store/userStore';
@@ -15,6 +22,7 @@ import { useUserStore } from '@/store/userStore';
  * prefilled with "LINK <code>" → poll for the link landing.
  */
 export function ConnectAgent() {
+  const router = useRouter();
   const profile = useUserStore((state) => state.profile);
   const [link, setLink] = useState<AgentLink | null>(null);
   const [pendingCode, setPendingCode] = useState<string | null>(null);
@@ -114,9 +122,19 @@ export function ConnectAgent() {
             Text a photo of any meal to {AGENT_NUMBER} and it lands in your log.
           </Text>
           <Button
+            title="Text Oliv"
+            icon="message-circle"
+            onPress={() => openAgentThread().catch(() => {})}
+          />
+          <Button
             title="Add Oliv to contacts"
             variant="secondary"
             onPress={() => Linking.openURL(agentContactCardUrl()).catch(() => {})}
+          />
+          <Button
+            title="What Oliv remembers"
+            variant="ghost"
+            onPress={() => router.push('/agent-memory')}
           />
           <Button title="Disconnect" variant="ghost" loading={busy} onPress={disconnect} />
         </>

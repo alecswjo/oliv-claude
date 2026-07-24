@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { UserAvatar } from '@/components/UserAvatar';
 import { Button, Card, Chip, Field } from '@/components/ui';
+import { TextThreadPreview } from '@/components/TextThreadPreview';
 import { colors, spacing, type } from '@/components/theme';
 import { computeGoals, feetInchesToCm, lbsToKg, validateGoalOverride } from '@/domain/goals';
 import type { ActivityLevel, BodyGoal, BodyProfile, Sex } from '@/domain/types';
@@ -37,7 +38,7 @@ export default function OnboardingScreen() {
   const units = useAppStore((state) => state.units);
   const setUnits = useAppStore((state) => state.setUnits);
 
-  const [step, setStep] = useState<0 | 1 | 2>(0);
+  const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
 
   // Step 0 — profile
   const [displayName, setDisplayName] = useState('');
@@ -137,7 +138,7 @@ export default function OnboardingScreen() {
     setCarbsG(String(goals.carbsG));
     setFatG(String(goals.fatG));
     setUsedDefaults(false);
-    setStep(2);
+    setStep(3);
   };
 
   const skipBody = () => {
@@ -147,7 +148,7 @@ export default function OnboardingScreen() {
     setCarbsG(String(DEFAULT_GOALS.carbsG));
     setFatG(String(DEFAULT_GOALS.fatG));
     setUsedDefaults(true);
-    setStep(2);
+    setStep(3);
   };
 
   const finish = () => {
@@ -171,13 +172,13 @@ export default function OnboardingScreen() {
       goalsAreDefault: usedDefaults,
       body,
     });
-    router.replace('/(tabs)');
+    router.replace('/text-setup');
   };
 
   const stepDots = useMemo(
     () => (
       <View style={styles.dots}>
-        {[0, 1, 2].map((dot) => (
+        {[0, 1, 2, 3].map((dot) => (
           <View key={dot} style={[styles.dot, step === dot && styles.dotActive]} />
         ))}
       </View>
@@ -191,15 +192,39 @@ export default function OnboardingScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.hero}>
-        <Text style={{ fontSize: 52 }}>🫒</Text>
         <Text style={styles.brand}>Oliv</Text>
-        <Text style={type.small}>Snap. Score. Share.</Text>
+        <Text style={styles.tagline}>
+          {step === 0 ? 'Healthy eating, one text away.' : 'A few details, then you can text your first meal.'}
+        </Text>
       </View>
       {stepDots}
 
       {step === 0 ? (
+        <View style={{ gap: spacing(4) }}>
+          <View style={{ gap: spacing(2) }}>
+            <Text style={styles.introTitle}>Your nutrition coach already lives in Messages.</Text>
+            <Text style={styles.introBody}>
+              Send a photo, type what you ate, or ask how your day is going. Oliv logs it, learns your
+              preferences, and keeps the full picture in the app.
+            </Text>
+          </View>
+          <TextThreadPreview />
+          <View style={styles.promiseRow}>
+            <Text style={styles.promise}>No searching food databases</Text>
+            <Text style={styles.promise}>Corrections by reply</Text>
+            <Text style={styles.promise}>Private by default</Text>
+          </View>
+          <Button title="Build my plan" onPress={() => setStep(1)} />
+          <Text style={styles.disclaimer}>
+            Oliv provides estimates and general nutrition coaching, not medical care.
+          </Text>
+        </View>
+      ) : null}
+
+      {step === 1 ? (
         <Card style={{ gap: spacing(3) }}>
-          <Text style={type.heading}>Make it yours</Text>
+          <Text style={type.heading}>What should Oliv call you?</Text>
+          <Text style={type.small}>This also creates your profile in the companion app.</Text>
           <View style={{ alignItems: 'center', marginVertical: spacing(2) }}>
             <UserAvatar emoji={avatarEmoji} color={avatarColor} size={72} />
           </View>
@@ -228,13 +253,13 @@ export default function OnboardingScreen() {
             title="Continue"
             loading={checkingName}
             onPress={async () => {
-              if (await validateProfile()) setStep(1);
+              if (await validateProfile()) setStep(2);
             }}
           />
         </Card>
       ) : null}
 
-      {step === 1 ? (
+      {step === 2 ? (
         <Card style={{ gap: spacing(3) }}>
           <Text style={type.heading}>Your numbers</Text>
           <Text style={type.small}>We'll compute daily calorie & macro targets (Mifflin-St Jeor). You can edit them next.</Text>
@@ -301,7 +326,7 @@ export default function OnboardingScreen() {
         </Card>
       ) : null}
 
-      {step === 2 ? (
+      {step === 3 ? (
         <Card style={{ gap: spacing(3) }}>
           <Text style={type.heading}>Daily targets</Text>
           <Text style={type.small}>
@@ -325,7 +350,7 @@ export default function OnboardingScreen() {
           </View>
           {targetsError ? <Text style={styles.error}>{targetsError}</Text> : null}
           <Button title="Start tracking 🫒" onPress={finish} />
-          <Button title="Back" variant="ghost" onPress={() => setStep(1)} />
+          <Button title="Back" variant="ghost" onPress={() => setStep(2)} />
         </Card>
       ) : null}
     </ScrollView>
@@ -335,9 +360,23 @@ export default function OnboardingScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.cream },
-  content: { padding: spacing(4), gap: spacing(4), paddingBottom: spacing(12), paddingTop: spacing(14) },
+  content: { padding: spacing(4), gap: spacing(4), paddingBottom: spacing(12), paddingTop: spacing(10), width: '100%', maxWidth: 560, alignSelf: 'center' },
   hero: { alignItems: 'center', gap: spacing(1) },
-  brand: { fontSize: 40, fontWeight: '900', color: colors.oliveDeep, letterSpacing: -1 },
+  brand: { ...type.brand, fontSize: 36 },
+  tagline: { ...type.small, textAlign: 'center', color: colors.ink50 },
+  introTitle: { ...type.display, fontSize: 32, lineHeight: 36, textAlign: 'center' },
+  introBody: { ...type.body, color: colors.ink70, lineHeight: 22, textAlign: 'center' },
+  promiseRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing(2) },
+  promise: {
+    ...type.tiny,
+    color: colors.oliveDeep,
+    backgroundColor: colors.oliveSoft,
+    paddingHorizontal: spacing(2.5),
+    paddingVertical: spacing(1.5),
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  disclaimer: { ...type.tiny, textAlign: 'center', lineHeight: 16 },
   dots: { flexDirection: 'row', justifyContent: 'center', gap: spacing(2) },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.oliveSoft },
   dotActive: { backgroundColor: colors.olive, width: 22 },

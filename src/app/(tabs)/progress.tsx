@@ -53,6 +53,30 @@ export default function ProgressScreen() {
         </View>
       </Card>
 
+      <Card style={{ gap: spacing(3) }}>
+        <View style={styles.consistencyTop}>
+          <View style={{ flex: 1, gap: spacing(1) }}>
+            <Text style={type.heading}>Weekly consistency</Text>
+            <Text style={type.small}>
+              {daysWithMeals >= 5
+                ? 'You hit the 5-day consistency goal. Missed days do not erase that work.'
+                : `${5 - daysWithMeals} more logging day${5 - daysWithMeals === 1 ? '' : 's'} for a consistent week.`}
+            </Text>
+          </View>
+          <Text style={styles.consistencyValue}>{daysWithMeals}/5</Text>
+        </View>
+        <View style={styles.dayDots}>
+          {week.map((day) => (
+            <View
+              key={day.dayKey}
+              accessibilityLabel={`${day.dayKey}: ${day.calories > 0 ? 'logged' : 'not logged'}`}
+              style={[styles.dayDot, day.calories > 0 && styles.dayDotDone]}
+            />
+          ))}
+        </View>
+        <Text style={type.tiny}>A flexible habit goal alongside your exact daily streak.</Text>
+      </Card>
+
       <Card>
         <Text style={[type.micro, { marginBottom: spacing(3) }]}>Last 7 days</Text>
         <View style={styles.chartArea}>
@@ -130,6 +154,11 @@ const styles = StyleSheet.create({
   streakNumberRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing(1.5) },
   streakNumber: { fontFamily: fonts.display, fontSize: 32, color: colors.oliveDeep, letterSpacing: -1, fontVariant: ['tabular-nums'] },
   streakUnit: { fontFamily: fonts.sansSemi, fontSize: 15, color: colors.ink50 },
+  consistencyTop: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
+  consistencyValue: { fontFamily: fonts.display, fontSize: 26, color: colors.olive },
+  dayDots: { flexDirection: 'row', gap: spacing(2) },
+  dayDot: { flex: 1, height: 8, borderRadius: radius.full, backgroundColor: colors.fill },
+  dayDotDone: { backgroundColor: colors.olive },
   chartArea: { position: 'relative' },
   targetLine: {
     position: 'absolute',

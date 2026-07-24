@@ -109,7 +109,7 @@ describe('Routes & navigation (integration through the real router)', () => {
     const app = renderRouter('src/app', { initialUrl: '/' });
     await app;
     await waitFor(() => expect(app.getPathname()).toBe('/onboarding'));
-    expect(await screen.findByText('Make it yours')).toBeTruthy(); // step 1
+    expect(await screen.findByText('Your nutrition coach already lives in Messages.')).toBeTruthy();
 
   });
 

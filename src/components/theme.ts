@@ -118,18 +118,10 @@ export const type = {
 
 export const elevation = {
   card: {
-    shadowColor: '#2C3B18',
-    shadowOpacity: 0.07,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
+    boxShadow: '0 1px 2px rgba(31, 38, 25, 0.05), 0 8px 24px rgba(31, 38, 25, 0.04)',
   },
   raised: {
-    shadowColor: '#2C3B18',
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 7,
+    boxShadow: '0 4px 14px rgba(44, 59, 24, 0.18)',
   },
 } as const;
 

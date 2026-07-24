@@ -22,6 +22,7 @@ import { onSaveError } from '@/services/storage';
 import { hydrateAll } from '@/store/appStore';
 import { useAuthStore } from '@/store/authStore';
 import { useNotificationStore } from '@/store/notificationStore';
+import { useSubscriptionStore } from '@/store/subscriptionStore';
 import { showToast } from '@/store/toastStore';
 
 /** Route to the relevant screen when a notification is tapped. */
@@ -110,6 +111,12 @@ export default function RootLayout() {
           }
         }
 
+        // StoreKit/RevenueCat initialization is non-blocking for local builds:
+        // without a public SDK key the store becomes `unconfigured`.
+        await useSubscriptionStore
+          .getState()
+          .initialize(useAuthStore.getState().userId);
+
         // Configure the notification handler + re-register the push token and
         // local reminder. Never prompts — only acts if permission is already
         // granted (the prompt lives in Settings, per best practice).
@@ -186,6 +193,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="sign-in" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
+        <Stack.Screen name="text-setup" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen
           name="log"
           options={{ presentation: 'modal', title: 'Log a meal', headerLeft: () => <HeaderClose /> }}
@@ -194,6 +202,9 @@ export default function RootLayout() {
         <Stack.Screen name="user/[id]" options={{ title: '' }} />
         <Stack.Screen name="connections" options={{ title: 'Connections' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+        <Stack.Screen name="paywall" options={{ title: 'Oliv Pro' }} />
+        <Stack.Screen name="agent-memory" options={{ title: 'Oliv memory' }} />
+        <Stack.Screen name="admin" options={{ title: 'Oliv Admin' }} />
         <Stack.Screen name="legal/privacy" options={{ title: 'Privacy Policy' }} />
         <Stack.Screen name="legal/terms" options={{ title: 'Terms of Use' }} />
       </Stack>

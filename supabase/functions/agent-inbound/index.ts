@@ -8,9 +8,13 @@
 //   text   → LINK handling / scope guard / chat loop with tools
 //
 // Deploy:  supabase functions deploy agent-inbound --no-verify-jwt
-// Secrets: AGENT_SECRET, SENDBLUE_API_KEY, SENDBLUE_API_SECRET, OPENAI_API_KEY
+// Secrets: SENDBLUE_WEBHOOK_SECRET, AGENT_SECRET, provider API keys,
+// SENDBLUE_API_KEY, SENDBLUE_API_SECRET
 // Webhook URL (set in Sendblue dashboard):
-//   https://<ref>.supabase.co/functions/v1/agent-inbound?secret=<AGENT_SECRET>
+//   https://<ref>.supabase.co/functions/v1/agent-inbound
+// Set SENDBLUE_WEBHOOK_SECRET as the webhook secret; Sendblue supplies it in
+// the sb-signing-secret header. Keep AGENT_SECRET separate: it authenticates
+// only gateway → agent-analyze calls.
 
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { mealTitle } from '../../../src/domain/nutritionValidation.ts';
@@ -29,6 +33,7 @@ import {
   mealTypeForHour,
   normalizeSendblue,
   parseLinkCommand,
+  secureEqual,
   scopeGuard,
   sniffImage,
   type MessageEnvelope,
@@ -55,7 +60,30 @@ function ok(body: Record<string, unknown> = { ok: true }): Response {
   });
 }
 
-/** Retry-safe outbound send: one send per (sender, clientRef), logged. */
+async function hasRequiredSubscription(db: SupabaseClient, userId: string): Promise<boolean> {
+  if (Deno.env.get('REQUIRE_ACTIVE_SUBSCRIPTION') !== 'true') return true;
+  const entitlement = Deno.env.get('REVENUECAT_ENTITLEMENT_ID') ?? 'pro';
+  const { data, error } = await db
+    .from('subscriptions')
+    .select('status, expires_at')
+    .eq('user_id', userId)
+    .eq('entitlement_id', entitlement)
+    .maybeSingle();
+  if (error) {
+    // Billing is an authorization boundary: once enforcement is enabled,
+    // infrastructure ambiguity must not silently grant a paid service.
+    console.error('subscription lookup failed', error);
+    return false;
+  }
+  if (!data || data.status === 'expired') return false;
+  return data.expires_at == null || new Date(data.expires_at).getTime() > Date.now();
+}
+
+/**
+ * Exactly-once outbound send: claim the client_ref by inserting first (a
+ * partial unique index backs this), send second, release the claim if the
+ * send fails so a retry can re-attempt.
+ */
 async function reply(
   db: SupabaseClient,
   env: { externalSenderId: string; lineNumber: string | null },
@@ -63,21 +91,26 @@ async function reply(
   content: string,
   clientRef: string,
 ): Promise<void> {
-  const { data: existing } = await db
+  const { data: claimed, error: insErr } = await db
     .from('agent_messages')
+    .insert({
+      provider: 'sendblue',
+      external_sender_id: env.externalSenderId,
+      user_id: userId,
+      direction: 'out',
+      content,
+      client_ref: clientRef,
+    })
     .select('id')
-    .eq('client_ref', clientRef)
     .maybeSingle();
-  if (existing) return;
-  await sendMessage(env.externalSenderId, content, env.lineNumber);
-  await db.from('agent_messages').insert({
-    provider: 'sendblue',
-    external_sender_id: env.externalSenderId,
-    user_id: userId,
-    direction: 'out',
-    content,
-    client_ref: clientRef,
-  });
+  if (insErr?.code === '23505') return; // another invocation owns this send
+  if (insErr) throw new Error(`outbound log failed: ${insErr.message}`);
+  try {
+    await sendMessage(env.externalSenderId, content, env.lineNumber);
+  } catch (err) {
+    await db.from('agent_messages').delete().eq('id', claimed!.id).then(undefined, () => {});
+    throw err;
+  }
 }
 
 /* -------------------------- unknown-sender path -------------------------- */
@@ -187,8 +220,75 @@ async function upsertRun(db: SupabaseClient, env: MessageEnvelope, userId: strin
     })
     .select('id')
     .single();
+  if (error?.code === '23505') {
+    // Race: a concurrent delivery opened the run first (unique partial index).
+    // Join it instead of double-processing the burst.
+    const { data: won } = await db
+      .from('agent_runs')
+      .select('id')
+      .eq('external_sender_id', env.externalSenderId)
+      .eq('state', 'collecting')
+      .maybeSingle();
+    if (won) return { runId: won.id, opened: false };
+  }
   if (error) throw new Error(`run insert failed: ${error.message}`);
   return { runId: data.id, opened: true };
+}
+
+/**
+ * Recover runs stranded in analyzing/committing by a crashed or CPU-killed
+ * invocation: fail them and apologize so the user isn't left in silence.
+ * Driven by the minute warm ping (empty POST body). Also sweeps scratch
+ * prefetch objects older than a day (failure paths can orphan them).
+ */
+async function sweepStuck(db: SupabaseClient): Promise<void> {
+  const cutoff = new Date(Date.now() - STUCK_RUN_MS).toISOString();
+  const { data: stuck } = await db
+    .from('agent_runs')
+    .select('id, user_id, external_sender_id, retry_count, media_urls')
+    .in('state', ['analyzing', 'committing'])
+    .lt('updated_at', cutoff)
+    .limit(10);
+  for (const run of stuck ?? []) {
+    await db
+      .from('agent_runs')
+      .update({
+        state: 'failed',
+        last_error: 'stuck run swept',
+        retry_count: (run.retry_count as number) + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', run.id);
+    const scratch = ((run.media_urls as string[]) ?? [])
+      .filter((u) => u.startsWith('scratch:'))
+      .map((u) => u.slice('scratch:'.length));
+    if (scratch.length > 0) {
+      await db.storage.from('agent-scratch').remove(scratch).catch(() => {});
+    }
+    try {
+      await reply(
+        db,
+        { externalSenderId: run.external_sender_id as string, lineNumber: null },
+        run.user_id as string,
+        FAILURE_REPLY,
+        `fail:${run.id}`,
+      );
+    } catch (err) {
+      console.warn('sweep reply failed', String(err));
+    }
+  }
+
+  // Orphaned prefetch objects (best-effort TTL sweep).
+  const { data: objects } = await db.storage
+    .from('agent-scratch')
+    .list('runs', { limit: 100, sortBy: { column: 'created_at', order: 'asc' } });
+  const dayAgo = Date.now() - 86_400_000;
+  const stale = (objects ?? [])
+    .filter((o) => o.created_at && new Date(o.created_at).getTime() < dayAgo)
+    .map((o) => `runs/${o.name}`);
+  if (stale.length > 0) {
+    await db.storage.from('agent-scratch').remove(stale).catch(() => {});
+  }
 }
 
 /** Wait out the debounce, then atomically claim the run (one winner). */
@@ -291,9 +391,13 @@ function toBase64(bytes: Uint8Array): string {
 
 Deno.serve(async (req) => {
   const url = new URL(req.url);
-  const secret = Deno.env.get('AGENT_SECRET');
-  const given = url.searchParams.get('secret') ?? req.headers.get('x-agent-secret');
-  if (!secret || given !== secret) {
+  const secret = Deno.env.get('SENDBLUE_WEBHOOK_SECRET') ?? '';
+  const headerSecret = req.headers.get('sb-signing-secret') ?? '';
+  const legacySecret =
+    Deno.env.get('ALLOW_LEGACY_AGENT_QUERY_SECRET') === 'true'
+      ? url.searchParams.get('secret') ?? ''
+      : '';
+  if (!secret || (!secureEqual(headerSecret, secret) && !secureEqual(legacySecret, secret))) {
     return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 });
   }
   if (req.method !== 'POST') return ok({ ignored: 'method' });
@@ -319,7 +423,18 @@ Deno.serve(async (req) => {
   }
 
   const env = normalizeSendblue(payload);
-  if (!env) return ok({ ignored: 'event' });
+  if (!env) {
+    // Warm/maintenance ping (the minute cron POSTs an empty body): use it to
+    // recover stuck runs + sweep orphaned scratch objects.
+    if (typeof payload.from_number !== 'string') {
+      const sweep = sweepStuck(admin()).catch((err) => console.warn('sweep failed', String(err)));
+      // @ts-ignore EdgeRuntime is provided by the Supabase Edge runtime.
+      if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(sweep);
+      else await sweep;
+      return ok({ maintained: true });
+    }
+    return ok({ ignored: 'event' });
+  }
 
   const db = admin();
 
@@ -374,12 +489,29 @@ Deno.serve(async (req) => {
       const userId = identity.user_id as string;
       await db.from('agent_messages').update({ user_id: userId }).eq('id', messageRowId);
 
+      if (!(await hasRequiredSubscription(db, userId))) {
+        await reply(
+          db,
+          env,
+          userId,
+          'Your Oliv Pro access is not active. Open the Oliv app to start a trial, restore a purchase, or redeem a friend code.',
+          `subscription:${userId}:${new Date().toISOString().slice(0, 10)}`,
+        ).catch(() => {});
+        return;
+      }
+
       // Per-user daily quota.
       const { data: used } = await db.rpc('bump_agent_usage', { p_user_id: userId });
       if (typeof used === 'number' && used > DAILY_MESSAGE_LIMIT) {
-        if (used === DAILY_MESSAGE_LIMIT + 1) {
-          await reply(db, env, userId, "We've hit today's message limit — back tomorrow! 🫒", `quota:${env.externalMessageId}`);
-        }
+        // Once-per-day notice: the date-scoped client_ref dedupes racing
+        // over-limit messages (unique index enforces it).
+        await reply(
+          db,
+          env,
+          userId,
+          "We've hit today's message limit — back tomorrow! 🫒",
+          `quota:${userId}:${new Date().toISOString().slice(0, 10)}`,
+        ).catch(() => {});
         return;
       }
 
@@ -554,6 +686,18 @@ Deno.serve(async (req) => {
               retry_count: run.retry_count + 1,
             })
             .eq('id', run.id);
+          // Failure paths must not leak prefetch objects into agent-scratch.
+          const { data: failedRun } = await db
+            .from('agent_runs')
+            .select('media_urls')
+            .eq('id', run.id)
+            .maybeSingle();
+          const orphaned = ((failedRun?.media_urls as string[]) ?? [])
+            .filter((u) => u.startsWith('scratch:'))
+            .map((u) => u.slice('scratch:'.length));
+          if (orphaned.length > 0) {
+            await db.storage.from('agent-scratch').remove(orphaned).catch(() => {});
+          }
           await reply(db, env, userId, isFormat ? PHOTO_FORMAT_REPLY : FAILURE_REPLY, `fail:${run.id}`);
         }
         return;

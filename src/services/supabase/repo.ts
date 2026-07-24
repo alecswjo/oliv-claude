@@ -23,12 +23,40 @@ function client() {
   return supabase;
 }
 
-export function publicPhotoUrl(path: string): string {
-  return client().storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl;
+/**
+ * meal-photos is a PRIVATE bucket (migration 0017): access is via signed URLs,
+ * mintable only for meals the caller may view (storage RLS mirrors meals RLS).
+ * URLs live for a week; every fetch re-signs, so expiry heals on refresh.
+ */
+const SIGNED_URL_TTL_S = 7 * 24 * 60 * 60;
+
+/** Signed URLs for the given storage paths, in input order ('' on failure). */
+export async function signedPhotoUrls(paths: string[]): Promise<string[]> {
+  if (paths.length === 0) return [];
+  const { data, error } = await client()
+    .storage.from(PHOTO_BUCKET)
+    .createSignedUrls(paths, SIGNED_URL_TTL_S);
+  if (error) throw error;
+  const byPath = new Map((data ?? []).map((item) => [item.path, item.signedUrl ?? '']));
+  return paths.map((path) => byPath.get(path) ?? '');
 }
 
-function mapMeal(row: MealRow): Meal {
-  return rowToMeal(row, publicPhotoUrl);
+/** Map rows to meals, batch-signing every photo path in one storage call. */
+async function mapMealsSigned(rows: MealRow[]): Promise<Meal[]> {
+  const allPaths = rows.flatMap((row) =>
+    row.photo_paths?.length ? row.photo_paths : row.photo_path ? [row.photo_path] : [],
+  );
+  let urlFor = (_path: string): string => '';
+  if (allPaths.length > 0) {
+    try {
+      const urls = await signedPhotoUrls(allPaths);
+      const byPath = new Map(allPaths.map((path, i) => [path, urls[i]]));
+      urlFor = (path) => byPath.get(path) ?? '';
+    } catch {
+      // Signing failed (offline blip): meals still render with emoji tiles.
+    }
+  }
+  return rows.map((row) => rowToMeal(row, urlFor));
 }
 
 /* ------------------------------- profiles ------------------------------- */
@@ -64,7 +92,7 @@ export async function fetchOwnMeals(userId: string): Promise<Meal[]> {
     .eq('user_id', userId)
     .order('logged_at', { ascending: false });
   if (error) throw error;
-  return (data as MealRow[]).map(mapMeal);
+  return mapMealsSigned(data as MealRow[]);
 }
 
 /** Ids of the user's meals deleted on any surface (tombstones) — a local copy
@@ -205,7 +233,7 @@ export async function fetchFeed(authorIds: string[], limit = 100): Promise<Meal[
     .order('logged_at', { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return (data as MealRow[]).map(mapMeal);
+  return mapMealsSigned(data as MealRow[]);
 }
 
 export async function fetchPublicMeals(userId: string): Promise<Meal[]> {
@@ -216,7 +244,7 @@ export async function fetchPublicMeals(userId: string): Promise<Meal[]> {
     .eq('is_private', false)
     .order('logged_at', { ascending: false });
   if (error) throw error;
-  return (data as MealRow[]).map(mapMeal);
+  return mapMealsSigned(data as MealRow[]);
 }
 
 export interface ProfileStats {

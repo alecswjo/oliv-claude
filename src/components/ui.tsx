@@ -71,7 +71,7 @@ export function Button({ title, variant = 'primary', loading, disabled, icon, st
       disabled={isDisabled}
       style={[
         styles.button,
-        variant === 'primary' && { backgroundColor: colors.olive, ...elevation.raised, shadowOpacity: 0.14 },
+        variant === 'primary' && { backgroundColor: colors.olive, ...elevation.raised },
         variant === 'secondary' && { backgroundColor: colors.oliveSoft },
         variant === 'ghost' && { backgroundColor: 'transparent' },
         variant === 'danger' && { backgroundColor: colors.surface, borderWidth: 1, borderColor: '#EAD7D2' },
@@ -253,6 +253,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
+    borderCurve: 'continuous',
     padding: spacing(4),
     ...elevation.card,
   },
@@ -260,6 +261,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing(3.5),
     paddingHorizontal: spacing(5),
     borderRadius: radius.md,
+    borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 50,
@@ -282,6 +284,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.line,
     borderRadius: radius.md,
+    borderCurve: 'continuous',
     paddingHorizontal: spacing(3.5),
     paddingVertical: spacing(3),
     fontFamily: fonts.sansMed,

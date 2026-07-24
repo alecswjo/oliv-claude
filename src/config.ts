@@ -20,6 +20,17 @@ export const SUPPORT_EMAIL = 'support@oliv.app';
  */
 export const AGENT_NUMBER = process.env.EXPO_PUBLIC_OLIV_AGENT_NUMBER ?? '';
 
+/**
+ * RevenueCat public SDK keys. These are intentionally build-time public
+ * values; RevenueCat secret API keys and webhook auth never belong in Expo.
+ */
+export const REVENUECAT_IOS_API_KEY =
+  process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? '';
+export const REVENUECAT_ANDROID_API_KEY =
+  process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ?? '';
+export const REVENUECAT_ENTITLEMENT_ID =
+  process.env.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID ?? 'pro';
+
 /** Oliv's contact card (name + logo) — saved by users so the thread isn't a bare number. */
 export function agentContactCardUrl(): string {
   return `${SUPABASE_URL.replace(/\/+$/, '')}/storage/v1/object/public/agent-assets/oliv.vcf`;

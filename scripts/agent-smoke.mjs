@@ -26,7 +26,11 @@ if (!URL_ || !SERVICE_KEY || !AGENT_SECRET) {
 }
 
 const db = createClient(URL_, SERVICE_KEY);
-const WEBHOOK = `${URL_}/functions/v1/agent-inbound?secret=${AGENT_SECRET}`;
+// Webhook auth is header-based (sb-signing-secret). WEBHOOK_SECRET should be
+// the deployed SENDBLUE_WEBHOOK_SECRET; AGENT_SECRET remains the fallback for
+// older deploys still on the query-param scheme.
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET ?? AGENT_SECRET;
+const WEBHOOK = `${URL_}/functions/v1/agent-inbound`;
 const SENDER = '+15005550006'; // reserved test number — never a real phone
 let failures = 0;
 
@@ -38,7 +42,7 @@ function assert(cond, label) {
 async function webhook(over = {}) {
   const res = await fetch(WEBHOOK, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'sb-signing-secret': WEBHOOK_SECRET },
     body: JSON.stringify({
       accountEmail: 'oliv',
       is_outbound: false,
@@ -122,11 +126,12 @@ async function main() {
     contentType: 'image/jpeg',
     upsert: true,
   });
-  const { data: pub } = db.storage.from('meal-photos').getPublicUrl(fixturePath);
+  const { data: pub, error: signErr } = await db.storage.from('meal-photos').createSignedUrl(fixturePath, 3600);
+  if (signErr) throw signErr;
   const photoEvent = {
     message_handle: randomUUID(),
     content: 'smoke test lunch',
-    media_url: pub.publicUrl,
+    media_url: pub.signedUrl,
   };
   await webhook(photoEvent);
   const meals = await pollMeals(userId, 1);

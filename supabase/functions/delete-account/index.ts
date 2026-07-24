@@ -53,7 +53,36 @@ Deno.serve(async (req) => {
       if (objects.length < 100) break;
     }
 
-    // 2. delete the auth user (cascades all rows)
+    // 2. purge texting-agent data that does NOT cascade from profiles:
+    //    - agent_messages rows logged before linking carry user_id NULL but
+    //      still hold the raw phone number + message content;
+    //    - agent_cooldowns keys on a hash of the sender;
+    //    - agent_usage / analyze_usage / deleted_meals have no FK at all.
+    const { data: identities } = await admin
+      .from('channel_identities')
+      .select('external_sender_id')
+      .eq('user_id', user.id);
+    const senders = (identities ?? []).map((r) => r.external_sender_id as string);
+    if (senders.length > 0) {
+      await admin.from('agent_messages').delete().in('external_sender_id', senders);
+      const hashes = await Promise.all(
+        senders.map(async (s) => {
+          const digest = await crypto.subtle.digest(
+            'SHA-256',
+            new TextEncoder().encode(`sendblue:${s}`),
+          );
+          return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+        }),
+      );
+      await admin.from('agent_cooldowns').delete().in('sender_hash', hashes);
+    }
+    await admin.from('agent_messages').delete().eq('user_id', user.id);
+    await admin.from('agent_usage').delete().eq('user_id', user.id);
+    await admin.from('analyze_usage').delete().eq('user_id', user.id);
+    await admin.from('deleted_meals').delete().eq('user_id', user.id);
+
+    // 3. delete the auth user (cascades all FK'd rows: profile, meals, social,
+    //    channel identities, link tokens, runs, memories, prefs)
     const { error: delErr } = await admin.auth.admin.deleteUser(user.id);
     if (delErr) throw delErr;
 

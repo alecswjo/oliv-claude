@@ -4,6 +4,18 @@
 
 import type { MealType } from '../../../src/domain/types.ts';
 
+/** Length-safe comparison for webhook secrets without early-exit equality. */
+export function secureEqual(left: string, right: string): boolean {
+  const a = new TextEncoder().encode(left);
+  const b = new TextEncoder().encode(right);
+  const length = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < length; i += 1) {
+    diff |= (a[i] ?? 0) ^ (b[i] ?? 0);
+  }
+  return diff === 0;
+}
+
 /** Provider-agnostic inbound message (docs/AGENT_V0_SPEC.md §3). */
 export interface MessageEnvelope {
   provider: 'sendblue';
@@ -170,7 +182,8 @@ export function scopeGuard(text: string): string | null {
   if (ED_PATTERNS.test(text)) {
     return (
       "I care more about you than about any number here, and this is beyond what I should coach on. " +
-      'Please talk to someone qualified — the NEDA helpline (nationaleatingdisorders.org, call/text 988 in a crisis) is free and confidential. ' +
+      'Please reach out to a licensed clinician or eating-disorder support organization in your country. ' +
+      'If you may be in immediate danger, contact your local emergency services now. ' +
       "I'm always happy to just log meals, no numbers attached — say the word and I'll hide them."
     );
   }

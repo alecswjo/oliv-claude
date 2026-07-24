@@ -111,7 +111,13 @@ export async function commitMeal(args: CommitMealArgs) {
     p_meal: row,
   });
   if (error) throw new Error(`commit_agent_meal failed: ${error.message}`);
-  return { validated, score, mealId: (data as { mealId: string }).mealId };
+  const result = data as { status?: string; mealId?: string };
+  // Old RPC shape ({mealId}) and new ({status, mealId}) both flow through;
+  // a 'blocked' status (tombstoned id) must never read as success.
+  if (result.status === 'blocked' || !result.mealId) {
+    throw new Error('meal insert blocked (tombstoned id)');
+  }
+  return { validated, score, mealId: result.mealId };
 }
 
 /** Idempotent photo upload at the app's exact path convention. */

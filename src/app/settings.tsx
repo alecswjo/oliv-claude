@@ -10,6 +10,7 @@ import { computeGoals, validateGoalOverride } from '@/domain/goals';
 import { confirmAction } from '@/services/confirm';
 import { resetAllStores, useAppStore } from '@/store/appStore';
 import { useAuthStore } from '@/store/authStore';
+import { useSubscriptionStore } from '@/store/subscriptionStore';
 import { showToast } from '@/store/toastStore';
 import { useUserStore } from '@/store/userStore';
 
@@ -22,6 +23,9 @@ export default function SettingsScreen() {
   const setGoals = useUserStore((state) => state.setGoals);
   const units = useAppStore((state) => state.units);
   const setUnits = useAppStore((state) => state.setUnits);
+  const aiDataConsentAt = useAppStore((state) => state.aiDataConsentAt);
+  const revokeAiDataConsent = useAppStore((state) => state.revokeAiDataConsent);
+  const subscriptionStatus = useSubscriptionStore((state) => state.status);
 
   const [displayName, setDisplayName] = useState(profile?.displayName ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
@@ -187,9 +191,47 @@ export default function SettingsScreen() {
             trackColor={{ true: colors.olive, false: colors.line }}
           />
         </View>
+        <View style={styles.switchRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={type.bodyBold}>AI meal analysis</Text>
+            <Text style={type.tiny}>
+              {aiDataConsentAt
+                ? 'Allowed — meal inputs may be processed by our configured AI provider'
+                : 'Not yet allowed — Oliv will ask before sending meal inputs'}
+            </Text>
+          </View>
+          {aiDataConsentAt ? (
+            <Button
+              title="Revoke"
+              variant="ghost"
+              onPress={() => {
+                revokeAiDataConsent();
+                showToast('AI analysis permission revoked');
+              }}
+            />
+          ) : null}
+        </View>
       </Card>
 
       <ConnectAgent />
+
+      <Card style={{ gap: spacing(2) }}>
+        <Text style={type.heading}>Oliv Pro</Text>
+        <Text style={type.small}>
+          {subscriptionStatus === 'pro'
+            ? 'Your subscription is active.'
+            : 'Unlock the full texting coach, durable memory, and personalized follow-ups.'}
+        </Text>
+        <Button
+          title={subscriptionStatus === 'pro' ? 'Manage subscription' : 'View plans'}
+          variant="secondary"
+          onPress={() =>
+            subscriptionStatus === 'pro'
+              ? Linking.openURL('https://apps.apple.com/account/subscriptions').catch(() => {})
+              : router.push('/paywall')
+          }
+        />
+      </Card>
 
       <NotificationsSettings />
 

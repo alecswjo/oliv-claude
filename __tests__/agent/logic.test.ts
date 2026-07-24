@@ -13,8 +13,18 @@ import {
   normalizeSendblue,
   parseLinkCommand,
   scopeGuard,
+  secureEqual,
   sniffImage,
 } from '../../supabase/functions/agent-inbound/logic';
+
+describe('secureEqual', () => {
+  it('accepts only exact webhook secrets', () => {
+    expect(secureEqual('correct-secret', 'correct-secret')).toBe(true);
+    expect(secureEqual('correct-secret', 'wrong-secret')).toBe(false);
+    expect(secureEqual('short', 'shorter')).toBe(false);
+    expect(secureEqual('', '')).toBe(true);
+  });
+});
 
 const inbound = (over: Record<string, unknown> = {}) => ({
   accountEmail: 'oliv',
@@ -161,7 +171,8 @@ describe('formatMealReply', () => {
 
 describe('scopeGuard', () => {
   it('intercepts eating-disorder signals with support copy', () => {
-    expect(scopeGuard('i have been starving myself all week')).toContain('nationaleatingdisorders');
+    expect(scopeGuard('i have been starving myself all week')).toContain('licensed clinician');
+    expect(scopeGuard('i have been starving myself all week')).toContain('local emergency services');
   });
   it('intercepts medical territory', () => {
     expect(scopeGuard('should I change my insulin dose for this meal?')).toContain('not a clinician');

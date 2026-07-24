@@ -9,6 +9,7 @@ import { ScoreBreakdown } from '@/components/ScoreBreakdown';
 import { Button, Card, Chip, Divider, Field, PressableScale } from '@/components/ui';
 import { colors, MEAL_TYPE_EMOJI, MEAL_TYPE_LABELS, radius, spacing, type } from '@/components/theme';
 import { mealTypeForHour } from '@/domain/dates';
+import { isBackendConfigured } from '@/config';
 import { computeHealthScore } from '@/domain/healthScore';
 import { newId } from '@/domain/ids';
 import { parseNumericInput as num } from '@/domain/numbers';
@@ -16,8 +17,10 @@ import { validateAnalysis } from '@/domain/nutritionValidation';
 import type { Confidence, Meal, MealAnalysis, MealType, ProcessingLevel } from '@/domain/types';
 import { runAnalysis, type AnalysisOutcome } from '@/services/analyzer/provider';
 import { AnalyzerError, MAX_ANALYZE_PHOTOS } from '@/services/analyzer/types';
+import { confirmAction } from '@/services/confirm';
 import { persistPhotos, preparePhotoForAnalysis, type PreparedPhoto } from '@/services/photos';
 import { useMealStore } from '@/store/mealStore';
+import { useAppStore } from '@/store/appStore';
 import { useUserStore } from '@/store/userStore';
 
 const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -63,6 +66,8 @@ export default function LogMealScreen() {
   const goBack = useSafeBack();
   const profile = useUserStore((state) => state.profile);
   const addMeal = useMealStore((state) => state.addMeal);
+  const aiDataConsentAt = useAppStore((state) => state.aiDataConsentAt);
+  const grantAiDataConsent = useAppStore((state) => state.grantAiDataConsent);
 
   const [mealType, setMealType] = useState<MealType>(mealTypeForHour(new Date().getHours()));
   const [description, setDescription] = useState('');
@@ -186,6 +191,19 @@ export default function LogMealScreen() {
     if (photos.length === 0 && description.trim().length === 0) {
       setInputError('Add a photo or describe your meal first.');
       return;
+    }
+    if (isBackendConfigured() && !aiDataConsentAt) {
+      const allowed = await confirmAction({
+        title: 'Allow AI meal analysis?',
+        message:
+          'Oliv will send the photos and description for this meal to our secure backend and configured AI provider to estimate nutrition. They are used to provide this feature, not for advertising. You can revoke permission in Settings.',
+        confirmLabel: 'Allow AI analysis',
+      });
+      if (!allowed) {
+        setInputError('AI analysis is off. You can still enter this meal manually.');
+        return;
+      }
+      grantAiDataConsent();
     }
     const controller = new AbortController();
     abortRef.current = controller;

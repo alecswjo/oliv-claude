@@ -14,20 +14,28 @@ export type Units = 'metric' | 'imperial';
 
 interface PersistedApp {
   units: Units;
+  /** ISO timestamp of explicit permission to send meal inputs to an AI provider. */
+  aiDataConsentAt: string | null;
 }
 
 interface AppState extends PersistedApp {
   hydrated: boolean;
 
   setUnits(units: Units): void;
+  grantAiDataConsent(): void;
+  revokeAiDataConsent(): void;
   hydrate(): Promise<void>;
 }
 
 export const useAppStore = create<AppState>()((set, get) => {
-  const persist = createPersister<PersistedApp>(STORE_NAME, () => ({ units: get().units }));
+  const persist = createPersister<PersistedApp>(STORE_NAME, () => ({
+    units: get().units,
+    aiDataConsentAt: get().aiDataConsentAt,
+  }));
 
   return {
     units: 'imperial', // US-first default (lb/ft); users can switch in Settings
+    aiDataConsentAt: null,
     hydrated: false,
 
     setUnits(units) {
@@ -35,9 +43,24 @@ export const useAppStore = create<AppState>()((set, get) => {
       persist();
     },
 
+    grantAiDataConsent() {
+      set({ aiDataConsentAt: new Date().toISOString() });
+      persist();
+    },
+
+    revokeAiDataConsent() {
+      set({ aiDataConsentAt: null });
+      persist();
+    },
+
     async hydrate() {
       const saved = await loadJson<PersistedApp>(STORE_NAME);
-      if (saved) set({ units: saved.units });
+      if (saved) {
+        set({
+          units: saved.units ?? 'imperial',
+          aiDataConsentAt: saved.aiDataConsentAt ?? null,
+        });
+      }
       set({ hydrated: true });
     },
   };

@@ -216,7 +216,8 @@ async function uploadMealPhotos(meal: Meal): Promise<void> {
   await repo.setMealPhotoPaths(meal.id, paths);
 
   const { useMealStore } = await import('@/store/mealStore');
-  useMealStore.getState().adoptPhotoUris(meal.id, paths.map(repo.publicPhotoUrl));
+  const signedUrls = await repo.signedPhotoUrls(paths);
+  useMealStore.getState().adoptPhotoUris(meal.id, signedUrls);
 }
 
 /** Every storage path a meal's photos may live at (indexed + legacy single). */

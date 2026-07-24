@@ -9,6 +9,7 @@
 // Secret:  supabase secrets set NOTIFY_SECRET=<random>   (must match private.app_settings)
 
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
+import { secureEqual } from '../agent-inbound/logic.ts';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const BACKFILL_GUARD_MS = 60 * 60 * 1000; // skip meals older than 1h (re-sync spam guard)
@@ -93,7 +94,8 @@ async function resolve(
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
-  if (req.headers.get('x-notify-secret') !== Deno.env.get('NOTIFY_SECRET')) {
+  const secret = Deno.env.get('NOTIFY_SECRET') ?? '';
+  if (!secret || !secureEqual(req.headers.get('x-notify-secret') ?? '', secret)) {
     return json({ error: 'forbidden' }, 403);
   }
 
@@ -115,20 +117,39 @@ Deno.serve(async (req) => {
   const resolved = await resolve(admin, payload);
   if (!resolved) return json({ sent: 0, reason: 'no recipients' });
 
-  // Filter recipients by their prefs (default true when no row), gather tokens.
-  const messages: Record<string, unknown>[] = [];
-  for (const { recipient, prefColumn } of resolved.targets) {
-    const { data: pref } = await admin
-      .from('notification_prefs')
-      .select(prefColumn)
-      .eq('user_id', recipient)
-      .maybeSingle();
-    if (pref && (pref as Record<string, boolean>)[prefColumn] === false) continue;
+  // Never notify someone who has blocked the actor (P1: blocks were ignored).
+  const recipientIds = resolved.targets.map((t) => t.recipient);
+  const { data: blockRows } = await admin
+    .from('blocks')
+    .select('blocker_id')
+    .eq('blocked_id', resolved.actor)
+    .in('blocker_id', recipientIds);
+  const blockers = new Set((blockRows ?? []).map((r) => r.blocker_id as string));
+  const targets = resolved.targets.filter((t) => !blockers.has(t.recipient));
 
-    const { data: tokens } = await admin.from('device_tokens').select('token').eq('user_id', recipient);
-    for (const row of tokens ?? []) {
+  // Batch prefs + tokens (P1: this was 2 sequential queries per follower).
+  const targetIds = targets.map((t) => t.recipient);
+  const [{ data: prefRows }, { data: tokenRows }] = await Promise.all([
+    admin.from('notification_prefs').select('*').in('user_id', targetIds),
+    admin.from('device_tokens').select('user_id, token').in('user_id', targetIds),
+  ]);
+  const prefsByUser = new Map(
+    (prefRows ?? []).map((row) => [row.user_id as string, row as Record<string, boolean>]),
+  );
+  const tokensByUser = new Map<string, string[]>();
+  for (const row of tokenRows ?? []) {
+    const list = tokensByUser.get(row.user_id as string) ?? [];
+    list.push(row.token as string);
+    tokensByUser.set(row.user_id as string, list);
+  }
+
+  const messages: Record<string, unknown>[] = [];
+  for (const { recipient, prefColumn } of targets) {
+    const pref = prefsByUser.get(recipient);
+    if (pref && pref[prefColumn] === false) continue; // default true when no row
+    for (const token of tokensByUser.get(recipient) ?? []) {
       messages.push({
-        to: row.token,
+        to: token,
         title: resolved.title,
         body: resolved.body,
         sound: 'default',

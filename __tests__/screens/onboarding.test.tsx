@@ -19,6 +19,7 @@ beforeEach(async () => {
 });
 
 async function fillProfileStep(username = 'jake_t') {
+  await fireEvent.press(screen.getByLabelText('Build my plan'));
   await fireEvent.changeText(screen.getByLabelText('Display name'), 'Jake');
   await fireEvent.changeText(screen.getByLabelText('Username'), username);
   await fireEvent.press(screen.getByLabelText('Continue'));
@@ -52,7 +53,7 @@ describe('Onboarding (spec §F1 / §13.1)', () => {
     expect(profile.goals).toEqual({ dailyCalories: 3106, proteinG: 155, fatG: 95, carbsG: 408 });
     expect(profile.goalsAreDefault).toBe(false);
     expect(profile.body?.weightKg).toBe(84);
-    expect(mockReplace).toHaveBeenCalledWith('/(tabs)');
+    expect(mockReplace).toHaveBeenCalledWith('/text-setup');
   });
 
   it('supports imperial input and converts to metric storage', async () => {
@@ -81,6 +82,7 @@ describe('Onboarding (spec §F1 / §13.1)', () => {
 
   it('rejects malformed usernames and short names', async () => {
     await render(<OnboardingScreen />);
+    await fireEvent.press(screen.getByLabelText('Build my plan'));
     await fireEvent.changeText(screen.getByLabelText('Display name'), 'Jake');
     await fireEvent.changeText(screen.getByLabelText('Username'), 'a!');
     await fireEvent.press(screen.getByLabelText('Continue'));

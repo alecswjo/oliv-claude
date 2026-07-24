@@ -12,6 +12,7 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { analyze, MAX_PHOTOS, ProviderError, type AnalyzeInput } from '../analyze/providers.ts';
+import { secureEqual } from '../agent-inbound/logic.ts';
 
 // Mirrors `analyze`'s abuse guards, except the per-photo cap: this caller is
 // our own trusted gateway sending real iPhone photos, which routinely exceed
@@ -44,8 +45,8 @@ async function withinQuota(userId: string): Promise<boolean> {
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
-  const secret = Deno.env.get('AGENT_SECRET');
-  if (!secret || req.headers.get('x-agent-secret') !== secret) {
+  const secret = Deno.env.get('AGENT_SECRET') ?? '';
+  if (!secret || !secureEqual(req.headers.get('x-agent-secret') ?? '', secret)) {
     return json({ error: 'forbidden' }, 403);
   }
 

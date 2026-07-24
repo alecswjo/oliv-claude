@@ -38,6 +38,17 @@ export default function TermsScreen() {
         account at any time in Settings, which permanently removes your data.
       </Text>
 
+      <Text style={styles.h}>Oliv Pro subscriptions</Text>
+      <Text style={styles.p}>
+        Oliv Pro is an auto-renewing subscription billed through your App Store
+        account. The price, billing period, and any trial or introductory offer
+        are shown before purchase. Unless you cancel at least 24 hours before
+        the current period ends, the subscription renews and your account is
+        charged. Manage or cancel it in your App Store subscription settings.
+        Eligibility for trials and offer codes is determined by Apple. You can
+        restore purchases from the Oliv Pro screen.
+      </Text>
+
       <Text style={styles.h}>Service</Text>
       <Text style={styles.p}>
         Oliv is provided "as is" without warranties. We may modify or

@@ -13,7 +13,7 @@ jest.mock('@/config', () => ({
 jest.mock('@/services/supabase/repo', () => ({
   fetchOwnMeals: jest.fn(),
   fetchDeletedMealIds: jest.fn(async () => new Set()),
-  publicPhotoUrl: jest.fn((path: string) => `https://cdn/${path}`),
+  signedPhotoUrls: jest.fn(async (paths: string[]) => paths.map((p) => `https://cdn/${p}`)),
 }));
 
 import type { Meal } from '@/domain/types';

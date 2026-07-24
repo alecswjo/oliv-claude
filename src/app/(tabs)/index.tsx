@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { DailySummaryCard } from '@/components/DailySummaryCard';
+import { CoachCard } from '@/components/CoachCard';
 import { MealCard } from '@/components/MealCard';
 import { Button, EmptyState } from '@/components/ui';
 import { colors, spacing } from '@/components/theme';
@@ -105,7 +106,8 @@ export default function HomeFeedScreen() {
       }}
       onEndReachedThreshold={0.4}
       ListHeaderComponent={
-        <View style={{ marginBottom: spacing(2) }}>
+        <View style={{ marginBottom: spacing(3), gap: spacing(3) }}>
+          <CoachCard />
           <DailySummaryCard summary={summary} goals={profile.goals} streak={streak} />
         </View>
       }

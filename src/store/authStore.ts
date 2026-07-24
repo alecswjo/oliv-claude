@@ -76,6 +76,11 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
       const { signOut } = await import('@/services/supabase/auth');
       await signOut();
+      // RevenueCat uses the Supabase UUID as its app user id. Detach it before
+      // another Oliv account uses this device.
+      await import('@/services/purchases')
+        .then((purchases) => purchases.clearPurchasesIdentity())
+        .catch(() => {});
       // Clear the local cache so another account signing in on this device
       // doesn't inherit (and re-sync) the previous user's data.
       const [{ useUserStore }, { useMealStore }, { useSocialStore }] = await Promise.all([

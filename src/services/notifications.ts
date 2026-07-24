@@ -73,8 +73,8 @@ export async function scheduleDailyReminder(hour: number, minute: number): Promi
   await Notifications.scheduleNotificationAsync({
     identifier: DAILY_REMINDER_ID,
     content: {
-      title: 'Time to log your meals 🥗',
-      body: "Keep your streak going — add what you ate today.",
+      title: 'A quick check-in 🫒',
+      body: 'A photo or one sentence is enough. Log today if it would be useful.',
     },
     trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour, minute },
   });

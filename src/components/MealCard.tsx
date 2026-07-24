@@ -72,7 +72,8 @@ export function MealCard({
 
   return (
     <PressableScale
-      accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
+      // The card contains its own author/olive buttons. Giving the parent a
+      // button role would create nested-button semantics on native and web.
       accessibilityLabel={`Meal: ${title}, ${meal.nutrition.calories} calories, health score ${meal.healthScore.value} out of 5`}
       onPress={onPress}
       style={styles.card}>
@@ -159,13 +160,14 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
+    borderCurve: 'continuous',
     padding: spacing(3.5),
     gap: spacing(3),
     ...elevation.card,
   },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(2.5) },
   authorTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing(2.5) },
-  photo: { width: '100%', aspectRatio: 16 / 10, borderRadius: radius.md, backgroundColor: colors.oliveSoft },
+  photo: { width: '100%', aspectRatio: 16 / 10, borderRadius: radius.md, borderCurve: 'continuous', backgroundColor: colors.oliveSoft },
   photoCountBadge: {
     position: 'absolute',
     top: spacing(2.5),

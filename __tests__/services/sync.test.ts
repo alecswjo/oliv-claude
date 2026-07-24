@@ -19,7 +19,7 @@ jest.mock('@/services/supabase/repo', () => ({
   upsertProfile: jest.fn(),
   insertMeal: jest.fn(),
   setMealPhotoPaths: jest.fn(),
-  publicPhotoUrl: jest.fn((path: string) => `https://cdn/${path}`),
+  signedPhotoUrls: jest.fn(async (paths: string[]) => paths.map((p) => `https://cdn/${p}`)),
   updateMeal: jest.fn(),
   deleteMeal: jest.fn(),
   setOlive: jest.fn(),
