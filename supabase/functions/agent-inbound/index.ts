@@ -25,6 +25,7 @@ import {
   formatMealReply,
   hourInTimezone,
   ingestionKeyInput,
+  isTypingEvent,
   mealTypeForHour,
   normalizeSendblue,
   parseLinkCommand,
@@ -32,12 +33,12 @@ import {
   sniffImage,
   type MessageEnvelope,
 } from './logic.ts';
-import { fetchMedia, sendMessage, sendTyping } from './sendblue.ts';
+import { fetchMedia, sendMedia, sendMessage, sendTyping } from './sendblue.ts';
 import { callAgentAnalyze, commitMeal, sha256Hex, uploadPhoto } from './ops.ts';
 // NOTE: agent.ts (AI SDK + zod) is dynamically imported only on chat turns —
 // keeping it out of the boot path cuts cold-start for the photo pipeline.
 
-const DEBOUNCE_MS = 3_000;
+const DEBOUNCE_MS = 2_000;
 const RUN_HARD_CAP_MS = 20_000;
 const MAX_RUN_PHOTOS = 5;
 const DAILY_MESSAGE_LIMIT = 100;
@@ -109,6 +110,13 @@ async function handleUnknown(db: SupabaseClient, env: MessageEnvelope): Promise<
         .is('user_id', null);
       await db.from('agent_cooldowns').delete().eq('sender_hash', senderHash);
       await reply(db, env, userId, LINK_SUCCESS_REPLY, `link:${env.externalMessageId}`);
+      // Follow with Oliv's contact card so the thread shows a name + logo.
+      try {
+        const vcfUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/agent-assets/oliv.vcf`;
+        await sendMedia(env.externalSenderId, vcfUrl, 'Save me as a contact 🫒', env.lineNumber);
+      } catch (err) {
+        console.warn('contact card send failed', String(err));
+      }
       return;
     }
     await db.from('agent_cooldowns').upsert({
@@ -296,6 +304,20 @@ Deno.serve(async (req) => {
   } catch {
     return ok({ ignored: 'body' });
   }
+  // "Contact is typing" → they may be writing a caption for photos already in
+  // an open capture window: nudge the window so the caption makes the batch.
+  const typingFrom = isTypingEvent(payload);
+  if (typingFrom) {
+    const db = admin();
+    await db
+      .from('agent_runs')
+      .update({ closes_at: new Date(Date.now() + DEBOUNCE_MS + 1_000).toISOString() })
+      .eq('external_sender_id', typingFrom)
+      .eq('state', 'collecting')
+      .gte('opened_at', new Date(Date.now() - RUN_HARD_CAP_MS).toISOString());
+    return ok({ ignored: 'typing' });
+  }
+
   const env = normalizeSendblue(payload);
   if (!env) return ok({ ignored: 'event' });
 
@@ -375,19 +397,42 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (env.mediaUrls.length > 0 || openRun) {
-        const { runId, opened } = await upsertRun(db, env, userId);
+        // Prefetch DURING the capture window: download + HEIC-convert each
+        // photo now, park the JPEG in agent-scratch, and record a scratch ref.
+        // The window's debounce then overlaps the slow part instead of
+        // preceding it. Prefetch happens BEFORE the run extend/append so the
+        // window can't close while a photo is still converting.
+        let mediaEntries: string[] = [];
+        if (env.mediaUrls.length > 0) {
+          mediaEntries = await Promise.all(
+            env.mediaUrls.map(async (mediaUrl, i) => {
+              try {
+                const raw = await fetchMedia(mediaUrl);
+                const norm = await normalizePhoto(db, raw);
+                const path = `runs/msg-${messageRowId}-${i}.jpg`;
+                const { error } = await db.storage
+                  .from('agent-scratch')
+                  .upload(path, norm.bytes.slice().buffer as ArrayBuffer, {
+                    contentType: 'image/jpeg',
+                    upsert: true,
+                  });
+                if (error) throw new Error(error.message);
+                return `scratch:${path}`;
+              } catch (err) {
+                // Legacy path retries (and reports properly) at claim time.
+                console.warn('media prefetch failed; deferring', String(err));
+                return mediaUrl;
+              }
+            }),
+          );
+        }
+        const { runId } = await upsertRun(db, env, userId);
         await db
           .from('agent_messages')
           .update({ run_id: runId, content: env.text || null })
           .eq('id', messageRowId);
-        // Stash media URLs on the message row content? No — keep them in a
-        // dedicated column-free way: we re-fetch from run messages below via
-        // the media map table. Simplest durable option: append to run state.
-        if (env.mediaUrls.length > 0) {
-          await db.rpc('append_run_media', {
-            p_run_id: runId,
-            p_urls: env.mediaUrls,
-          });
+        if (mediaEntries.length > 0) {
+          await db.rpc('append_run_media', { p_run_id: runId, p_urls: mediaEntries });
         }
         const run = await claimRun(db, runId);
         if (!run) return; // another invocation owns the close
@@ -414,9 +459,18 @@ Deno.serve(async (req) => {
 
           const photos: { base64: string; mediaType: string }[] = [];
           const uploadBytes: Uint8Array[] = [];
-          for (const mediaUrl of urls) {
-            const raw = await fetchMedia(mediaUrl);
-            const norm = await normalizePhoto(db, raw);
+          for (const entry of urls) {
+            let norm: { bytes: Uint8Array; mediaType: string };
+            if (entry.startsWith('scratch:')) {
+              // Prefetched during the capture window — already a JPEG.
+              const path = entry.slice('scratch:'.length);
+              const { data, error } = await db.storage.from('agent-scratch').download(path);
+              if (error || !data) throw new Error(`scratch download failed: ${error?.message}`);
+              norm = { bytes: new Uint8Array(await data.arrayBuffer()), mediaType: 'image/jpeg' };
+            } else {
+              const raw = await fetchMedia(entry);
+              norm = await normalizePhoto(db, raw);
+            }
             photos.push({ base64: toBase64(norm.bytes), mediaType: norm.mediaType });
             uploadBytes.push(norm.bytes);
           }
@@ -478,6 +532,13 @@ Deno.serve(async (req) => {
             `reply:${run.id}`,
           );
           await db.from('agent_runs').update({ state: 'replied', updated_at: new Date().toISOString() }).eq('id', run.id);
+          // Scratch prefetch objects are transient — clear them (best-effort).
+          const scratchPaths = urls
+            .filter((u) => u.startsWith('scratch:'))
+            .map((u) => u.slice('scratch:'.length));
+          if (scratchPaths.length > 0) {
+            await db.storage.from('agent-scratch').remove(scratchPaths).catch(() => {});
+          }
         } catch (err) {
           const isFormat = err instanceof PhotoFormatError;
           console.error('meal run failed', err);

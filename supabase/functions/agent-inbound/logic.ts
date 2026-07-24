@@ -47,6 +47,19 @@ export function normalizeSendblue(payload: Record<string, unknown>): MessageEnve
   };
 }
 
+/**
+ * A "contact is typing" webhook event (best-effort match — Sendblue doesn't
+ * document the exact shape). Used only as a hint to extend an open capture
+ * window; a false negative costs nothing.
+ */
+export function isTypingEvent(payload: Record<string, unknown>): string | null {
+  const type = typeof payload.message_type === 'string' ? payload.message_type : '';
+  const status = typeof payload.status === 'string' ? payload.status : '';
+  if (!/typing/i.test(type) && !/typing/i.test(status)) return null;
+  const from = typeof payload.from_number === 'string' ? payload.from_number.trim() : '';
+  return from.startsWith('+') ? from : null;
+}
+
 /** `LINK <token>` (case-insensitive, tolerant of surrounding text/whitespace). */
 export function parseLinkCommand(text: string): string | null {
   const match = /(?:^|\s)link\s+([a-f0-9]{32})(?:\s|$)/i.exec(text);

@@ -59,6 +59,18 @@ describe('normalizeSendblue', () => {
   });
 });
 
+describe('isTypingEvent', () => {
+  const { isTypingEvent } = jest.requireActual('../../supabase/functions/agent-inbound/logic');
+  it('detects typing events by type or status', () => {
+    expect(isTypingEvent({ message_type: 'typing_indicator', from_number: '+14085551234' })).toBe('+14085551234');
+    expect(isTypingEvent({ status: 'TYPING', from_number: '+14085551234' })).toBe('+14085551234');
+  });
+  it('rejects regular messages and missing senders', () => {
+    expect(isTypingEvent(inbound())).toBeNull();
+    expect(isTypingEvent({ message_type: 'typing_indicator' })).toBeNull();
+  });
+});
+
 describe('parseLinkCommand', () => {
   const token = 'a'.repeat(32);
   it('parses LINK <token> case-insensitively', () => {

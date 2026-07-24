@@ -29,6 +29,25 @@ export async function sendMessage(number: string, content: string, fromNumber?: 
   }
 }
 
+/** Send a message with a media attachment (e.g. the Oliv contact card). */
+export async function sendMedia(
+  number: string,
+  mediaUrl: string,
+  content: string,
+  fromNumber?: string | null,
+): Promise<void> {
+  const from = fromNumber ?? Deno.env.get('SENDBLUE_FROM_NUMBER') ?? undefined;
+  const res = await fetch(`${API_BASE}/send-message`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ number, content, media_url: mediaUrl, ...(from ? { from_number: from } : {}) }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) {
+    throw new Error(`sendblue media send failed ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  }
+}
+
 /** Best-effort typing indicator (the <2s ack). Never throws. */
 export async function sendTyping(number: string, fromNumber?: string | null): Promise<void> {
   try {

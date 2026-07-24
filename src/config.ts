@@ -20,6 +20,11 @@ export const SUPPORT_EMAIL = 'support@oliv.app';
  */
 export const AGENT_NUMBER = process.env.EXPO_PUBLIC_OLIV_AGENT_NUMBER ?? '';
 
+/** Oliv's contact card (name + logo) — saved by users so the thread isn't a bare number. */
+export function agentContactCardUrl(): string {
+  return `${SUPABASE_URL.replace(/\/+$/, '')}/storage/v1/object/public/agent-assets/oliv.vcf`;
+}
+
 function isValidUrl(value: string): boolean {
   try {
     new URL(value);

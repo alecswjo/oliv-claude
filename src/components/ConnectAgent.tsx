@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Platform, StyleSheet, Text, View } from 'react-native';
-import { AGENT_NUMBER, isBackendConfigured } from '@/config';
+import { AGENT_NUMBER, agentContactCardUrl, isBackendConfigured } from '@/config';
 import { Button, Card } from '@/components/ui';
 import { colors, spacing, type } from '@/components/theme';
 import { fetchAgentLink, mintAgentLinkToken, revokeAgentLink, type AgentLink } from '@/services/agentLink';
@@ -113,7 +113,12 @@ export function ConnectAgent() {
             Connected as <Text style={type.bodyBold}>{link.phone}</Text> 🫒{'\n'}
             Text a photo of any meal to {AGENT_NUMBER} and it lands in your log.
           </Text>
-          <Button title="Disconnect" variant="secondary" loading={busy} onPress={disconnect} />
+          <Button
+            title="Add Oliv to contacts"
+            variant="secondary"
+            onPress={() => Linking.openURL(agentContactCardUrl()).catch(() => {})}
+          />
+          <Button title="Disconnect" variant="ghost" loading={busy} onPress={disconnect} />
         </>
       ) : (
         <>
