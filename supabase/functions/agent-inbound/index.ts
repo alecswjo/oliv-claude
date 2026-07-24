@@ -219,9 +219,11 @@ async function convertHeicViaStorage(db: SupabaseClient, bytes: Uint8Array): Pro
     .upload(path, bytes.slice().buffer as ArrayBuffer, { contentType: 'image/heic', upsert: true });
   if (error) throw new Error(`scratch upload failed: ${error.message}`);
   try {
+    // width+height+contain: width alone leaves the original height in place
+    // (a 5712-tall strip — the "zoomed" bug); contain preserves aspect ratio.
     const url =
       `${Deno.env.get('SUPABASE_URL')}/storage/v1/render/image/authenticated/agent-scratch/${path}` +
-      `?width=1280&quality=80`;
+      `?width=1280&height=1280&resize=contain&quality=80`;
     // The authenticated render endpoint validates a JWT — the auto-injected
     // SUPABASE_SERVICE_ROLE_KEY may be the new sb_secret_ format, so prefer
     // the explicitly configured legacy JWT (secret SERVICE_ROLE_JWT).
