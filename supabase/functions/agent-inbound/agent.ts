@@ -28,6 +28,8 @@ export interface ChatDeps {
   profile: ProfileCtx;
   /** external id of the inbound message that triggered this turn (idempotency for log_meal). */
   triggerMessageId: string;
+  /** Raw text of the triggering message — deterministic guard for destructive tools. */
+  triggerText: string;
   history: { direction: 'in' | 'out'; content: string }[];
 }
 
@@ -289,6 +291,15 @@ export async function runChatTurn(deps: ChatDeps, userText: string): Promise<str
         "Delete the user's most recent meal. Only call after the user clearly asked for deletion.",
       inputSchema: z.object({}),
       execute: async () => {
+        // Deterministic guard (review P1): deletion requires the CURRENT
+        // message to express delete intent — history/injected text can't
+        // trigger it. Anything else asks the user to confirm first.
+        if (!/\b(delete|remove|undo|scrap|erase|get rid|take (it|that) (off|out|back))\b/i.test(deps.triggerText)) {
+          return {
+            needsUserConfirmation: true,
+            hint: 'Ask the user to explicitly confirm the deletion; only their direct request can delete.',
+          };
+        }
         const meal = await lastMeal();
         if (!meal) return { error: 'no meal found' };
         const { error } = await admin

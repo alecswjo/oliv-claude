@@ -132,16 +132,21 @@ export function formatMealReply(args: {
   score: number;
   confidence: 'high' | 'medium' | 'low';
   isPrivate: boolean;
+  /** Day-so-far totals INCLUDING this meal — the running-budget line. */
+  today?: { calories: number; proteinG: number; goalCalories: number; goalProteinG: number };
 }): string {
-  const { title, calories, proteinG, carbsG, fatG, score, confidence, isPrivate } = args;
+  const { title, calories, proteinG, carbsG, fatG, score, confidence, isPrivate, today } = args;
   const line1 = `Logged ✓ ${title}`;
   const line2 = `~${Math.round(calories)} cal · ${Math.round(proteinG)}g protein · ${Math.round(carbsG)}g carbs · ${Math.round(fatG)}g fat`;
   const line3 = `Health score ${score.toFixed(1)} 🫒${isPrivate ? '' : ' · shared to your feed'}`;
+  const budget = today
+    ? `Today: ${Math.round(today.calories)}/${Math.round(today.goalCalories)} cal · ${Math.round(today.proteinG)}/${Math.round(today.goalProteinG)}g protein\n`
+    : '';
   const caveat =
     confidence === 'high'
       ? 'Reply to correct anything.'
       : `Rough estimate — tell me what's off and I'll fix it.`;
-  return `${line1}\n${line2}\n${line3}\n${caveat}`;
+  return `${line1}\n${line2}\n${line3}\n${budget}${caveat}`;
 }
 
 export const UNKNOWN_SENDER_REPLY =

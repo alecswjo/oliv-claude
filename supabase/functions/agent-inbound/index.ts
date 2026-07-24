@@ -39,7 +39,7 @@ import {
   type MessageEnvelope,
 } from './logic.ts';
 import { fetchMedia, sendMedia, sendMessage, sendTyping } from './sendblue.ts';
-import { callAgentAnalyze, commitMeal, sha256Hex, uploadPhoto } from './ops.ts';
+import { callAgentAnalyze, commitMeal, dayKeyInTz, sha256Hex, uploadPhoto } from './ops.ts';
 // NOTE: agent.ts (AI SDK + zod) is dynamically imported only on chat turns —
 // keeping it out of the boot path cuts cold-start for the photo pipeline.
 
@@ -651,6 +651,32 @@ Deno.serve(async (req) => {
           });
           await db.from('agent_messages').update({ meal_id: mealId }).eq('run_id', run.id);
 
+          // Running budget (day-so-far incl. this meal, user's timezone) —
+          // the single strongest retention pattern from the competitive
+          // research. Optional: a failure only drops the budget line.
+          let today: { calories: number; proteinG: number; goalCalories: number; goalProteinG: number } | undefined;
+          try {
+            const since = new Date(Date.now() - 36 * 3_600_000).toISOString();
+            const { data: dayMeals } = await db
+              .from('meals')
+              .select('logged_at, calories, protein_g')
+              .eq('user_id', userId)
+              .gte('logged_at', since);
+            const todayKey = dayKeyInTz(new Date().toISOString(), timezone);
+            const todays = (dayMeals ?? []).filter(
+              (m) => dayKeyInTz(m.logged_at as string, timezone) === todayKey,
+            );
+            const goals = (profile?.goals as { dailyCalories?: number; proteinG?: number }) ?? {};
+            today = {
+              calories: todays.reduce((a, m) => a + (m.calories as number), 0),
+              proteinG: todays.reduce((a, m) => a + (m.protein_g as number), 0),
+              goalCalories: goals.dailyCalories ?? 2000,
+              goalProteinG: goals.proteinG ?? 100,
+            };
+          } catch (err) {
+            console.warn('running-budget calc failed', String(err));
+          }
+
           await reply(
             db,
             env,
@@ -664,6 +690,7 @@ Deno.serve(async (req) => {
               score: score.value,
               confidence: validated.confidence,
               isPrivate: defaultPrivate,
+              today,
             }),
             `reply:${run.id}`,
           );
@@ -736,6 +763,7 @@ Deno.serve(async (req) => {
             },
           },
           triggerMessageId: env.externalMessageId,
+          triggerText: env.text,
           history,
         },
         env.text,
