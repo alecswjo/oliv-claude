@@ -10,6 +10,7 @@ import { z } from 'npm:zod@^3.25.0';
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { mealTitle, validateAnalysis } from '../../../src/domain/nutritionValidation.ts';
 import { computeHealthScore } from '../../../src/domain/healthScore.ts';
+import { nextMilestone, repairableDayKey, streakFromKeys } from '../../../src/domain/streaks.ts';
 import type { MealType } from '../../../src/domain/types.ts';
 import { callAgentAnalyze, commitMeal, dayKeyInTz, sha256Hex } from './ops.ts';
 import { hourInTimezone, mealTypeForHour } from './logic.ts';
@@ -324,6 +325,50 @@ export async function runChatTurn(deps: ChatDeps, userText: string): Promise<str
         );
         if (error) return { error: error.message };
         return { dailyRecap: enabled, hour: hour ?? 20 };
+      },
+    }),
+
+    get_streak: tool({
+      description:
+        "The user's current logging streak, next milestone, and whether a broken streak is repairable with their weekly Olive Save.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const [{ data: mealRows }, { data: freezeRows }] = await Promise.all([
+          admin
+            .from('meals')
+            .select('logged_at')
+            .eq('user_id', userId)
+            .gte('logged_at', new Date(Date.now() - 400 * 86_400_000).toISOString())
+            .limit(2000),
+          admin.from('streak_freezes').select('day').eq('user_id', userId),
+        ]);
+        const keys = new Set<string>([
+          ...(mealRows ?? []).map((m) => dayKeyInTz(m.logged_at as string, tz)),
+          ...(freezeRows ?? []).map((f) => String(f.day)),
+        ]);
+        const streak = streakFromKeys(keys, todayKey);
+        return {
+          streak,
+          nextMilestone: nextMilestone(streak),
+          repairableDay: repairableDayKey(keys, todayKey),
+          loggedToday: keys.has(todayKey),
+        };
+      },
+    }),
+
+    use_streak_save: tool({
+      description:
+        'Spend the weekly Olive Save to repair a one-day streak gap. Only after get_streak shows a repairableDay and the user agrees.',
+      inputSchema: z.object({
+        day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('The repairableDay from get_streak'),
+      }),
+      execute: async ({ day }) => {
+        const { data, error } = await admin.rpc('use_streak_freeze', {
+          p_day: day,
+          p_user_id: userId,
+        });
+        if (error) return { error: error.message };
+        return data as { status: string };
       },
     }),
 

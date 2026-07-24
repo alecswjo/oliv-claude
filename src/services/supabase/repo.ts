@@ -106,6 +106,32 @@ export async function fetchDeletedMealIds(userId: string): Promise<Set<string>> 
   return new Set((data ?? []).map((row) => row.id as string));
 }
 
+/** Freeze days ("Olive Saves") as YYYY-MM-DD keys — union into streak math. */
+export async function fetchStreakFreezes(userId: string): Promise<string[]> {
+  const { data, error } = await client()
+    .from('streak_freezes')
+    .select('day')
+    .eq('user_id', userId);
+  if (error) throw error;
+  return (data ?? []).map((row) => String(row.day));
+}
+
+/** Spend the weekly Olive Save on a missed day. Status: used | already_covered | limit | invalid. */
+export async function useStreakFreeze(day: string): Promise<{ status: string }> {
+  const { data, error } = await client().rpc('use_streak_freeze', { p_day: day });
+  if (error) throw error;
+  return data as { status: string };
+}
+
+/** Redeem a friend/promo code for comped Pro (writes the subscriptions mirror). */
+export async function redeemCoupon(
+  code: string,
+): Promise<{ status: string; until?: string }> {
+  const { data, error } = await client().rpc('redeem_coupon', { p_code: code });
+  if (error) throw error;
+  return data as { status: string; until?: string };
+}
+
 export async function insertMeal(meal: Meal): Promise<void> {
   const { error } = await client().from('meals').insert(mealToInsert(meal));
   if (error) throw error;

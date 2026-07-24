@@ -8,6 +8,7 @@
     "scheme": "oliv",
     "userInterfaceStyle": "light",
     "ios": {
+      "icon": "./assets/images/icon-v2.png",
       "bundleIdentifier": "app.oliv.tracker",
       "supportsTablet": false,
       "usesAppleSignIn": true,
