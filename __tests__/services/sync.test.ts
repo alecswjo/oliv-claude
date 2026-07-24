@@ -15,6 +15,7 @@ jest.mock('@/config', () => ({
 jest.mock('@/services/supabase/repo', () => ({
   fetchProfile: jest.fn(),
   fetchOwnMeals: jest.fn(),
+  fetchDeletedMealIds: jest.fn(async () => new Set()),
   upsertProfile: jest.fn(),
   insertMeal: jest.fn(),
   setMealPhotoPaths: jest.fn(),

@@ -67,6 +67,17 @@ export async function fetchOwnMeals(userId: string): Promise<Meal[]> {
   return (data as MealRow[]).map(mapMeal);
 }
 
+/** Ids of the user's meals deleted on any surface (tombstones) — a local copy
+ *  of one of these must be dropped, never re-pushed. */
+export async function fetchDeletedMealIds(userId: string): Promise<Set<string>> {
+  const { data, error } = await client()
+    .from('deleted_meals')
+    .select('id')
+    .eq('user_id', userId);
+  if (error) throw error;
+  return new Set((data ?? []).map((row) => row.id as string));
+}
+
 export async function insertMeal(meal: Meal): Promise<void> {
   const { error } = await client().from('meals').insert(mealToInsert(meal));
   if (error) throw error;

@@ -12,6 +12,7 @@ jest.mock('@/config', () => ({
 
 jest.mock('@/services/supabase/repo', () => ({
   fetchOwnMeals: jest.fn(),
+  fetchDeletedMealIds: jest.fn(async () => new Set()),
   publicPhotoUrl: jest.fn((path: string) => `https://cdn/${path}`),
 }));
 
@@ -74,6 +75,19 @@ it('preserves local photo URIs when the server row is still photo-less', async (
   await sync.refreshOwnMeals(true);
 
   expect(useMealStore.getState().meals[0].photoUris).toEqual(['file:///p.jpg']);
+});
+
+it('drops tombstoned local copies (deleted via the agent) instead of keeping them', async () => {
+  useMealStore.getState().replaceAll([
+    mkMeal('ghost', '2026-07-23T10:00:00Z'),
+    mkMeal('alive-local', '2026-07-23T11:00:00Z'),
+  ]);
+  mocked.fetchOwnMeals.mockResolvedValue([]);
+  mocked.fetchDeletedMealIds.mockResolvedValue(new Set(['ghost']));
+
+  await sync.refreshOwnMeals(true);
+
+  expect(useMealStore.getState().meals.map((m) => m.id)).toEqual(['alive-local']);
 });
 
 it('throttles unforced refreshes to once a minute', async () => {

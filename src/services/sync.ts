@@ -312,12 +312,19 @@ export async function refreshOwnMeals(force = false): Promise<void> {
   if (!userId) return;
   try {
     const repo = await import('@/services/supabase/repo');
-    const serverMeals = await repo.fetchOwnMeals(userId);
+    const [serverMeals, deletedIds] = await Promise.all([
+      repo.fetchOwnMeals(userId),
+      repo.fetchDeletedMealIds(userId).catch(() => new Set<string>()),
+    ]);
     const { useMealStore } = await import('@/store/mealStore');
     const localById = new Map(useMealStore.getState().meals.map((meal) => [meal.id, meal]));
     const serverIds = new Set(serverMeals.map((meal) => meal.id));
-    // Keep local meals the server doesn't know yet (offline logs mid-push).
-    const localKept = [...localById.values()].filter((meal) => !serverIds.has(meal.id));
+    // Keep local meals the server doesn't know yet (offline logs mid-push) —
+    // unless they're tombstoned: deleted on another surface (e.g. by the
+    // texting agent), so the local copy is a ghost, not an unsynced log.
+    const localKept = [...localById.values()].filter(
+      (meal) => !serverIds.has(meal.id) && !deletedIds.has(meal.id),
+    );
     // Same photo-preserving reconcile as hydrate: a row whose photo upload is
     // still in flight must not clobber the local photos.
     const reconciled = serverMeals.map((server) => {
@@ -374,9 +381,10 @@ export async function hydrateForUser(userId: string): Promise<{ hasProfile: bool
   await loadPending();
   await replayPending();
 
-  let [profile, serverMeals] = await Promise.all([
+  let [profile, serverMeals, deletedIds] = await Promise.all([
     repo.fetchProfile(userId),
     repo.fetchOwnMeals(userId),
+    repo.fetchDeletedMealIds(userId).catch(() => new Set<string>()),
   ]);
 
   if (!profile) {
@@ -390,8 +398,16 @@ export async function hydrateForUser(userId: string): Promise<{ hasProfile: bool
 
   const localById = new Map(useMealStore.getState().meals.map((meal) => [meal.id, meal]));
   const serverIds = new Set(serverMeals.map((meal) => meal.id));
+  // Tombstoned meals were deleted on another surface (agent/another device):
+  // dropping the local copy is correct; re-pushing it would resurrect it (the
+  // server blocks that insert anyway).
   const localOnly = [...localById.values()]
-    .filter((meal) => !serverIds.has(meal.id) && (!isUuid(meal.userId) || meal.userId === userId))
+    .filter(
+      (meal) =>
+        !serverIds.has(meal.id) &&
+        !deletedIds.has(meal.id) &&
+        (!isUuid(meal.userId) || meal.userId === userId),
+    )
     .map((meal) => ({ ...meal, userId }));
 
   // A meal whose row reached the server but whose photo upload didn't would
