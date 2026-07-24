@@ -294,6 +294,50 @@ export function pushNotificationPrefs(prefs: NotifPrefs): void {
   run({ kind: 'notifPrefs', prefs });
 }
 
+/* ---------------------------- foreground refresh -------------------------- */
+
+let lastOwnMealsRefresh = 0;
+
+/**
+ * Focused pull of the user's own meals (for server-created meals — e.g. logged
+ * via the texting agent) merged into the local store. Deliberately NOT
+ * `hydrateForUser`: no pending-op replay, no local-only re-push — just a fetch
+ * + photo-preserving merge. Throttled to once a minute unless forced.
+ */
+export async function refreshOwnMeals(force = false): Promise<void> {
+  if (!backendActive()) return;
+  if (!force && Date.now() - lastOwnMealsRefresh < 60_000) return;
+  lastOwnMealsRefresh = Date.now();
+  const userId = currentUserId();
+  if (!userId) return;
+  try {
+    const repo = await import('@/services/supabase/repo');
+    const serverMeals = await repo.fetchOwnMeals(userId);
+    const { useMealStore } = await import('@/store/mealStore');
+    const localById = new Map(useMealStore.getState().meals.map((meal) => [meal.id, meal]));
+    const serverIds = new Set(serverMeals.map((meal) => meal.id));
+    // Keep local meals the server doesn't know yet (offline logs mid-push).
+    const localKept = [...localById.values()].filter((meal) => !serverIds.has(meal.id));
+    // Same photo-preserving reconcile as hydrate: a row whose photo upload is
+    // still in flight must not clobber the local photos.
+    const reconciled = serverMeals.map((server) => {
+      const local = localById.get(server.id);
+      return !server.photoUris?.length && local?.photoUris?.length
+        ? { ...server, photoUris: local.photoUris }
+        : server;
+    });
+    const merged = [...localKept, ...reconciled].sort((a, b) => (a.loggedAt < b.loggedAt ? 1 : -1));
+    useMealStore.getState().replaceAll(merged);
+  } catch (err) {
+    logSyncError('refreshOwnMeals')(err);
+  }
+}
+
+/** Test seam. */
+export function resetRefreshThrottleForTests(): void {
+  lastOwnMealsRefresh = 0;
+}
+
 /* -------------------------------- hydrate -------------------------------- */
 
 /**

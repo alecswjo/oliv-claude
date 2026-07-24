@@ -1,4 +1,6 @@
-import type { HealthScore, MealAnalysis, ProcessingLevel, ScoreFactor } from './types';
+// Explicit .ts extension: this module is also imported by the Deno-based
+// gateway (supabase/functions/agent-inbound), and Deno requires it.
+import type { HealthScore, MealAnalysis, ProcessingLevel, ScoreFactor } from './types.ts';
 
 /**
  * Oliv Health Score — normative algorithm, spec §6.

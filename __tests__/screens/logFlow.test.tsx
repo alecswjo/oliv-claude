@@ -66,7 +66,9 @@ describe('Log meal flow (spec J2 / §13.2)', () => {
     expect(meals[0].foodItems).toEqual(['Grilled chicken', 'Brown rice', 'Broccoli']);
     expect(meals[0].healthScore.value).toBe(4.7);
     expect(meals[0].source).toBe('ai');
-    expect(meals[0].isPrivate).toBe(false);
+    // New accounts default private (agent spec §7) — meals stay off the feed
+    // until the user flips "Private by default" off or shares explicitly.
+    expect(meals[0].isPrivate).toBe(true);
     expect(mockBack).toHaveBeenCalled();
   });
 

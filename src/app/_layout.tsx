@@ -11,7 +11,7 @@ import * as Updates from 'expo-updates';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
-import { Pressable } from 'react-native';
+import { AppState, Pressable } from 'react-native';
 import { isBackendConfigured } from '@/config';
 import { Icon } from '@/components/Icon';
 import { useSafeBack } from '@/components/navigation';
@@ -132,6 +132,18 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (ready) void SplashScreen.hideAsync().catch(() => {});
+  }, [ready]);
+
+  // Foregrounding pulls the user's own meals so server-created ones (texted
+  // to the agent) appear without a relaunch. Throttled inside refreshOwnMeals.
+  useEffect(() => {
+    if (!ready || !isBackendConfigured()) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void import('@/services/sync').then((sync) => sync.refreshOwnMeals()).catch(() => {});
+      }
+    });
+    return () => sub.remove();
   }, [ready]);
 
   // Route on notification taps (foreground/background + cold-start). Set up

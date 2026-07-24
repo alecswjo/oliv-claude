@@ -14,6 +14,12 @@ export const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? ''
 /** Where report-content / support emails go; shown in Settings and Legal. */
 export const SUPPORT_EMAIL = 'support@oliv.app';
 
+/**
+ * The texting agent's phone number (E.164). Unset ⇒ the "Text your meals"
+ * settings card is hidden. Set EXPO_PUBLIC_OLIV_AGENT_NUMBER in `.env`.
+ */
+export const AGENT_NUMBER = process.env.EXPO_PUBLIC_OLIV_AGENT_NUMBER ?? '';
+
 function isValidUrl(value: string): boolean {
   try {
     new URL(value);

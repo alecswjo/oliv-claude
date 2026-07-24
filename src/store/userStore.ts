@@ -70,7 +70,9 @@ export const useUserStore = create<UserState>()((set, get) => {
         goals: input.goals,
         goalsAreDefault: input.goalsAreDefault,
         body: input.body,
-        defaultPrivate: false,
+        // New accounts default private (agent spec §7): texted + logged meals
+        // stay off the feed until the user opts into sharing.
+        defaultPrivate: true,
         longestStreak: 0,
         isDemo: false,
       };

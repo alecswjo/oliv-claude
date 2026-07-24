@@ -1,4 +1,6 @@
-import type { Confidence, MealAnalysis, ProcessingLevel } from './types';
+// Explicit .ts extension: this module is also imported by the Deno-based
+// gateway (supabase/functions/agent-inbound), and Deno requires it.
+import type { Confidence, MealAnalysis, ProcessingLevel } from './types.ts';
 
 /**
  * Validation & clamping for analyzer output — spec §F2.6.
